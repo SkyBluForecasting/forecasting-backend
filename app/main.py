@@ -1,0 +1,48 @@
+from fastapi import FastAPI, Depends, Security, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from .auth import validate_token
+from .s3 import get_forecast, get_latest_forecast
+import logging
+
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="Forecasting API",
+    description="API for serving solar/load forecasts",
+    version="1.0.0"
+)
+
+security = HTTPBearer()
+
+async def get_token(request: Request, credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
+    # Log the full raw Authorization header as received in the HTTP request
+    raw_auth_header = request.headers.get("Authorization")
+    logger.info(f"Raw Authorization header: {repr(raw_auth_header)}")
+
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    
+    token = credentials.credentials.strip()  # FastAPI's HTTPBearer already strips "Bearer "
+
+    logger.info(f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}")
+
+    return token
+
+@app.get("/forecast")
+def read_forecast(
+    utility_id: str,
+    asset_id: str, 
+    date: str, 
+    token: str = Depends(get_token)
+):
+    validate_token(token)
+    return get_forecast(utility_id, asset_id, date)
+
+@app.get("/forecast/latest")
+def read_latest_forecast(
+    utility_id: str,
+    asset_id: str, 
+    token: str = Depends(get_token)
+):
+    validate_token(token)
+    return get_latest_forecast(utility_id, asset_id)

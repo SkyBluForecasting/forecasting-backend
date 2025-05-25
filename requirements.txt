@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+boto3
+python-jose[cryptography]
+authlib
+python-dotenv
+pytest
+httpx
+moto  # for mocking boto3 in tests
+requests
+
+# Development dependencies
+black==23.12.1
+isort==5.13.2
+pytest-cov==4.1.0
