@@ -1,6 +1,6 @@
 # Forecasting Backend
 
-A FastAPI backend service that serves solar/load forecasts from S3 to authorized clients via secure endpoints.
+A FastAPI backend service that serves solar and load forecasts from S3 to authorized clients via secure endpoints.
 
 ## Features
 
