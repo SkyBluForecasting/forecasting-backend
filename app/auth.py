@@ -109,6 +109,23 @@ def validate_token(token: str) -> dict:
             },
         )
         claims.validate()  # checks exp, nbf, etc.
+
+        # Debug logging for claims
+        logger.info("Token claims: %s", claims)
+        logger.info("Raw permissions: %s", claims.get("permissions"))
+        logger.info("Raw scope: %s", claims.get("scope"))
+
+        # Check for required permissions
+        permissions = claims.get("permissions", [])
+        if "read:forecast" not in permissions:
+            # If permissions is empty, check scope
+            scope = claims.get("scope", "")
+            if "read:forecast" not in scope.split():
+                raise HTTPException(
+                    status_code=403,
+                    detail="Token does not have required permission: read:forecast",
+                )
+
         logger.info(f"Token validated: subject={claims.get('sub')}")
 
         return claims
