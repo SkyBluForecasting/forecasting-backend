@@ -12,7 +12,11 @@ def test_validate_token():
     """Test token validation with a valid token."""
     # Create a mock claims object with a validate method
     mock_claims = MagicMock()
-    mock_claims.get.return_value = "test-subject"
+    mock_claims.get.side_effect = lambda key, default=None: {
+        "sub": "test-subject",
+        "scope": "read:forecast",
+    }.get(key, default)
+    mock_claims.validate = MagicMock()
 
     # Mock the token validation to return our mock claims
     with patch("app.auth.get_cached_jwks"), patch(

@@ -19,7 +19,11 @@ def test_read_forecast():
 
     # Create mock claims
     mock_claims = MagicMock()
-    mock_claims.get.return_value = "test-subject"
+    mock_claims.get.side_effect = lambda key, default=None: {
+        "sub": "test-subject",
+        "scope": "read:forecast",
+    }.get(key, default)
+    mock_claims.validate = MagicMock()
 
     # Create mock S3 response
     mock_s3 = MagicMock()
