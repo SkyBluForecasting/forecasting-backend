@@ -1,0 +1,46 @@
+name: Deploy to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to deploy'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
+
+      - name: Copy .env file to EC2
+        run: |
+          echo "${{ secrets.ENV_FILE_STAGING }}" | \
+            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
+            'cat > ~/app/.env'
+
+      - name: SSH into EC2 and restart Docker container
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
+            cd ~/app
+            git fetch --tags
+            git checkout ${{ github.event.inputs.tag }}
+
+            docker stop forecasting-api || true
+            docker rm forecasting-api || true
+            docker rmi forecasting-api || true
+
+            docker build -t forecasting-api .
+            docker run -d \
+              --name forecasting-api \
+              --env-file .env \
+              -p 80:8000 \
+              forecasting-api
+          EOF
