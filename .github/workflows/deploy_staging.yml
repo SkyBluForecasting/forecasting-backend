@@ -22,25 +22,25 @@ jobs:
 
       - name: Copy .env file to EC2
         run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
+            mkdir -p ~/app
+          EOF
+
           echo "${{ secrets.ENV_FILE_STAGING }}" | \
             ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
             'cat > ~/app/.env'
 
       - name: SSH into EC2 and restart Docker container
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
-            cd ~/app
-            git fetch --tags
-            git checkout ${{ github.event.inputs.tag }}
-
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
             docker stop forecasting-api || true
             docker rm forecasting-api || true
-            docker rmi forecasting-api || true
 
-            docker build -t forecasting-api .
+            docker pull your-dockerhub-user/forecasting-api:${{ github.event.inputs.tag }}
+
             docker run -d \
               --name forecasting-api \
-              --env-file .env \
+              --env-file ~/app/.env \
               -p 80:8000 \
-              forecasting-api
+              your-dockerhub-user/forecasting-api:${{ github.event.inputs.tag }}
           EOF
