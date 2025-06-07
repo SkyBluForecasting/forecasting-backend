@@ -5,9 +5,11 @@ A FastAPI backend service that serves solar/load forecasts from S3 to authorized
 ## Features
 
 - Secure API endpoints with Auth0 authentication
-- S3 integration for forecast data storage
+- S3 integration for retrieving forecast data
 - FastAPI-based REST API with OpenAPI documentation
 - Environment-based configuration
+- Docker support for easy deployment
+- ngrok integration for exposing endpoints
 
 ## Prerequisites
 
@@ -15,6 +17,8 @@ A FastAPI backend service that serves solar/load forecasts from S3 to authorized
 - AWS credentials configured (for S3 access)
 - Auth0 account and API configuration
 - pip (Python package manager)
+- Docker (optional, for containerized deployment)
+- ngrok (optional, for exposing endpoints)
 
 ## Authentication Setup
 
@@ -64,11 +68,6 @@ A FastAPI backend service that serves solar/load forecasts from S3 to authorized
      - FastAPI uses its own **IAM credentials** (configured via environment variables) to access forecast data in S3 using `boto3`.
    - S3 authorizes access based on the IAM user's permissions, not the client's token.
 
-3. Error Handling:
-   - Invalid tokens return 401 Unauthorized
-   - Missing permissions return 403 Forbidden
-   - S3 access errors return 500 Internal Server Error
-
 ## Local Development Setup
 
 1. Clone the repository:
@@ -110,6 +109,50 @@ AUTH0_CALLBACK_URL=http://localhost:8000/oauth2-redirect
 uvicorn app.main:app --reload
 ```
 
+## Docker Deployment
+
+1. Build the Docker image:
+```bash
+docker build -t forecasting-api .
+```
+
+2. Run the container:
+```bash
+docker run -p 8000:8000 --env-file .env forecasting-api
+```
+
+The API will be available at `http://localhost:8000`. Make sure your `.env` file contains all required environment variables.
+
+## Exposing Endpoints with ngrok
+
+To expose your local API endpoints to the internet for testing:
+
+1. Install ngrok:
+```bash
+# macOS (using Homebrew)
+brew install ngrok
+
+# Or download from https://ngrok.com/download
+```
+
+2. Run the development server
+```bash
+uvicorn app.main:app --reload
+```
+
+3. In a new terminal, start ngrok:
+```bash
+ngrok http 8000
+```
+
+4. ngrok will provide a public URL (e.g., `https://abc123.ngrok.io`) that forwards to your local server
+
+5. Update your Auth0 configuration:
+   - Add the ngrok URL to your Auth0 application's allowed callback URLs
+   - Update the `AUTH0_CALLBACK_URL` in your `.env` file to use the ngrok URL
+
+Note: The ngrok URL changes each time you restart ngrok  without a paid account.
+
 ## Authentication Setup & Testing
 
 To test API endpoints locally, you need a valid JWT token from Auth0:
@@ -135,14 +178,7 @@ Note: The `scope` parameter is required to get a token with the necessary permis
 
 ## API Documentation
 
-Once the server is running, you can access:
-- Interactive API documentation: `http://localhost:8000/docs`
-- Alternative API documentation: `http://localhost:8000/redoc`
-
-To use the API:
-1. Click the "Authorize" button
-2. Enter your token with the "Bearer" prefix: `Bearer your_access_token`
-3. Click "Authorize"
+Once the server is running, you can access interactive API documentation: `http://localhost:8000/docs`
 
 The API provides the following endpoints:
 
@@ -167,12 +203,6 @@ Run the test suite:
 ```bash
 pytest
 ```
-
-The test suite includes:
-- Authentication tests
-- API endpoint tests
-- Parameter validation tests
-- Error handling tests
 
 ## Project Structure
 
