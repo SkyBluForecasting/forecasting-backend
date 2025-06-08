@@ -23,11 +23,11 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
 
-      - name: Copy .env file to EC2 root folder
+      - name: Copy .env file to EC2
         run: |
           echo "${{ secrets.ENV_FILE_STAGING }}" | \
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
-          'cat > ~/.env'
+            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
+            'cat > ~/forecasting-backend/.env'
 
       - name: List files before rsync
         run: |
