@@ -17,6 +17,11 @@ jobs:
         with:
           fetch-depth: 0  # needed to fetch all tags
 
+      - name: Checkout selected tag
+        run: |
+          git fetch --tags
+          git checkout ${{ github.event.inputs.tag }}
+
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.8.0
         with:
@@ -28,20 +33,17 @@ jobs:
             ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
             'mkdir -p ~/app && cat > ~/app/.env'
 
-      - name: Copy source code to EC2
+      - name: Copy project files to EC2
         run: |
           rsync -avz --delete \
             -e "ssh -o StrictHostKeyChecking=no" \
-            --exclude '.git' \
             ./ ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/app
 
       - name: SSH into EC2 and restart Docker container
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
             set -e
             cd ~/app
-            git fetch --tags || true
-            git checkout ${{ github.event.inputs.tag }}
 
             docker stop forecasting-api || true
             docker rm forecasting-api || true
