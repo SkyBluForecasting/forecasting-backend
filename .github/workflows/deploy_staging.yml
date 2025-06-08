@@ -38,9 +38,10 @@ jobs:
 
             docker pull your-dockerhub-user/forecasting-api:${{ github.event.inputs.tag }}
 
+            docker build -t forecasting-api:${{ github.event.inputs.tag }} .
             docker run -d \
               --name forecasting-api \
-              --env-file ~/app/.env \
+              --env-file .env \
               -p 80:8000 \
-              your-dockerhub-user/forecasting-api:${{ github.event.inputs.tag }}
+              forecasting-api:${{ github.event.inputs.tag }}
           EOF
