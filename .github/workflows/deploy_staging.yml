@@ -15,12 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # needed to fetch all tags
-
-      - name: Checkout selected tag
-        run: |
-          git fetch --tags
-          git checkout ${{ github.event.inputs.tag }}
+          fetch-depth: 0
 
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.8.0
@@ -33,10 +28,12 @@ jobs:
             ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
             'mkdir -p ~/app && cat > ~/app/.env'
 
-      - name: Copy project files to EC2
+      - name: Rsync project files to EC2
         run: |
           rsync -avz --delete \
             -e "ssh -o StrictHostKeyChecking=no" \
+            --exclude ".git" \
+            --exclude "node_modules" \
             ./ ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/app
 
       - name: SSH into EC2 and restart Docker container
@@ -45,11 +42,17 @@ jobs:
             set -e
             cd ~/app
 
+            echo "Stopping existing container if any..."
             docker stop forecasting-api || true
+            echo "Removing existing container if any..."
             docker rm forecasting-api || true
+            echo "Removing existing image if any..."
             docker rmi forecasting-api || true
 
+            echo "Building new Docker image..."
             docker build -t forecasting-api .
+
+            echo "Starting new container..."
             docker run -d \
               --name forecasting-api \
               --env-file .env \
