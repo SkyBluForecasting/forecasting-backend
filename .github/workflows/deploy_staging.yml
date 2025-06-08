@@ -38,10 +38,10 @@ jobs:
 
           echo "✅ Upload complete"
 
-            - name: List files before rsync
-              run: |
-                echo "Current directory: $(pwd)"
-                ls -la
+      - name: List files before rsync
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -la
 
       - name: Copy project files to EC2
         run: |
