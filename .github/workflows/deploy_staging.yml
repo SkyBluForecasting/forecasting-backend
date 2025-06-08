@@ -15,7 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Ensure all tags are fetched
+          fetch-depth: 0  # needed to fetch tags
 
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.8.0
@@ -28,27 +28,30 @@ jobs:
             ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
             'mkdir -p ~/app && cat > ~/app/.env'
 
-      - name: Rsync project files to EC2
+      - name: Copy project files to EC2
         run: |
-          rsync -avz --delete \
+          rsync -avz --delete --exclude='.git' \
             -e "ssh -o StrictHostKeyChecking=no" \
-            ./ ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/app/
+            ./ ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/app
 
-      - name: Build and run Docker on EC2
+      - name: SSH into EC2 and restart Docker container
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
             set -e
             cd ~/app
 
-            echo "Stopping old container if it exists..."
+            echo "--- CONTENTS OF ~/app ---"
+            ls -la
+
+            echo "--- STOPPING old Docker container if it exists ---"
             docker stop forecasting-api || true
             docker rm forecasting-api || true
             docker rmi forecasting-api || true
 
-            echo "Building Docker image..."
+            echo "--- BUILDING Docker image ---"
             docker build -t forecasting-api .
 
-            echo "Running new container..."
+            echo "--- RUNNING container ---"
             docker run -d \
               --name forecasting-api \
               --env-file .env \
