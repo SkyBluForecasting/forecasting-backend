@@ -14,33 +14,53 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
 
-      - name: Copy .env file to EC2
+      - name: Copy project files to EC2 under ~/forecasting-backend
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
-            mkdir -p ~/app
-          EOF
+          rsync -avz --delete --exclude='.git' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend
 
-          echo "${{ secrets.ENV_FILE_STAGING }}" | \
-            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
-            'cat > ~/app/.env'
+      - name: Upload .env file to EC2 root folder (~/forecasting-backend)
+        run: |
+          echo "${{ secrets.ENV_FILE_STAGING }}" > temp.env
+          scp -o StrictHostKeyChecking=no temp.env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
+          rm temp.env
+
+      - name: Confirm .env exists on EC2 root folder
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
+            'ls -l ~/forecasting-backend/.env && head -n 5 ~/forecasting-backend/.env'
 
       - name: SSH into EC2 and restart Docker container
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
+            set -e
+            cd ~/forecasting-backend
+
+            echo "--- CONTENTS OF ~/forecasting-backend ---"
+            ls -la
+
+            echo "--- STOPPING old Docker container if it exists ---"
             docker stop forecasting-api || true
             docker rm forecasting-api || true
+            docker rmi forecasting-api || true
 
-            docker pull your-dockerhub-user/forecasting-api:${{ github.event.inputs.tag }}
+            echo "--- BUILDING Docker image ---"
+            docker build -t forecasting-api .
 
+            echo "--- RUNNING container ---"
             docker run -d \
               --name forecasting-api \
-              --env-file ~/app/.env \
+              --env-file .env \
               -p 80:8000 \
-              your-dockerhub-user/forecasting-api:${{ github.event.inputs.tag }}
+              forecasting-api
           EOF
