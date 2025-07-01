@@ -11,7 +11,7 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_read_forecast():
+def test_read_latest_forecast():
     """Test the forecast endpoint with valid parameters."""
     # Create a mock key set
     mock_key_set = MagicMock(spec=KeySet)
@@ -30,11 +30,16 @@ def test_read_forecast():
     mock_s3.get_object.return_value = {
         "Body": MagicMock(read=lambda: b'{"forecast": "test"}')
     }
+    mock_s3.list_objects_v2.return_value = {
+        "Contents": [{"Key": "test/test/20240101.json"}]
+    }
 
-    # Mock the token validation and S3 functions
-    with patch("app.main.get_token", return_value="test-token"), patch(
-        "app.auth.validate_token", return_value=mock_claims
-    ), patch("app.auth.decode_jwt_header", return_value={"kid": "test-kid"}), patch(
+    # Patch BUCKET_NAME in app.s3
+    with patch("app.s3.BUCKET_NAME", "dummy-bucket"), patch(
+        "app.main.get_token", return_value="test-token"
+    ), patch("app.auth.validate_token", return_value=mock_claims), patch(
+        "app.auth.decode_jwt_header", return_value={"kid": "test-kid"}
+    ), patch(
         "app.auth.get_cached_jwks", return_value=mock_key_set
     ), patch(
         "authlib.jose.jwt.decode", return_value=mock_claims
@@ -42,7 +47,7 @@ def test_read_forecast():
         "app.s3.get_s3_client", return_value=mock_s3
     ):
         response = client.get(
-            "/forecast?utility_id=test&asset_id=test&date=2024-03-24",
+            "/forecast/latest?asset_id=test",
             headers={"Authorization": "Bearer test-token"},
         )
         assert response.status_code == 200
