@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .auth import validate_token
-from .s3 import get_forecast, get_latest_forecast
+from .s3 import get_latest_forecast
 
 logger = logging.getLogger(__name__)
 
@@ -52,33 +52,11 @@ async def get_token(
     return token
 
 
-@app.get("/forecast")
-def read_forecast(
-    utility_id: str, asset_id: str, date: str, token: str = Depends(get_token)
-):
-    """Get a forecast for a specific utility, asset, and date.
-
-    Args:
-        utility_id: The utility identifier.
-        asset_id: The asset identifier.
-        date: The date of the forecast.
-        token: The JWT token for authentication.
-
-    Returns:
-        dict: The forecast data.
-    """
-    validate_token(token)
-    return get_forecast(utility_id, asset_id, date)
-
-
 @app.get("/forecast/latest")
-def read_latest_forecast(
-    utility_id: str, asset_id: str, token: str = Depends(get_token)
-):
-    """Get the latest forecast for a specific utility and asset.
+def read_latest_forecast(asset_id: str, token: str = Depends(get_token)):
+    """Get the latest forecast for a specific asset.
 
     Args:
-        utility_id: The utility identifier.
         asset_id: The asset identifier.
         token: The JWT token for authentication.
 
@@ -86,4 +64,4 @@ def read_latest_forecast(
         dict: The latest forecast data.
     """
     validate_token(token)
-    return get_latest_forecast(utility_id, asset_id)
+    return get_latest_forecast(asset_id)

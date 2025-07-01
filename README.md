@@ -135,20 +135,11 @@ Once the server is running, you can access interactive API documentation: `http:
 
 The API provides the following endpoints:
 
-### Get Forecast
-- `GET /forecast`
-- Parameters:
-  - `utility_id` (required): The utility identifier (e.g., "ieso")
-  - `asset_id` (required): The asset identifier (e.g., "L9M")
-  - `date` (required): The forecast date in YYYY-MM-DD format
-- Example: `/forecast?utility_id=ieso&asset_id=L9M&date=2024-03-24`
-
 ### Get Latest Forecast
 - `GET /forecast/latest`
 - Parameters:
-  - `utility_id` (required): The utility identifier (e.g., "ieso")
   - `asset_id` (required): The asset identifier (e.g., "L9M")
-- Example: `/forecast/latest?utility_id=ieso&asset_id=L9M`
+- Example: `/forecast/latest?asset_id=L9M`
 
 ## Testing
 
