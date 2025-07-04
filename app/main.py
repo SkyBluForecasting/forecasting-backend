@@ -31,15 +31,13 @@ async def get_token(
     Returns:
         str: The extracted JWT token.
 
-    Raises:
-        HTTPException: If the authorization header is missing.
+    Notes:
+            - If the Authorization header is missing or invalid, FastAPI's
+            HTTPBearer will return a 403 before this function is called.
     """
     # Log the full raw Authorization header as received in the HTTP request
     raw_auth_header = request.headers.get("Authorization")
     logger.info(f"Raw Authorization header: {repr(raw_auth_header)}")
-
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Missing authorization header")
 
     token = (
         credentials.credentials.strip()
