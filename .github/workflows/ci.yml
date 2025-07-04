@@ -35,8 +35,14 @@ jobs:
       run: |
         isort . --check-only
 
+    - name: Load environment variables from ENV_FILE_STAGING
+      run: echo "${{ secrets.ENV_FILE_STAGING }}" > .env
+
     - name: Run tests
       run: |
+        set -a
+        source .env
+        set +a
         pytest tests/
 
   coverage:
@@ -61,7 +67,7 @@ jobs:
     - name: Run tests with coverage (branch coverage)
       run: |
         pytest --cov=app --cov-report=xml --cov-report=term-missing --cov-branch tests/
-        coverage report --fail-under=80
+        coverage report --fail-under=100
 
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
