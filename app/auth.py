@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import os
 from functools import lru_cache
 
 import requests
@@ -10,13 +11,19 @@ from authlib.jose import JsonWebKey, jwt
 from authlib.jose.errors import JoseError
 from fastapi import HTTPException
 
-# --- Configuration ---
-AUTH0_DOMAIN = "dev-zk4j1lb7dnrwc0xg.us.auth0.com"
-API_AUDIENCE = "https://forecasting-api.forecasting"
-ALGORITHMS = ["RS256"]
-JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-
 logger = logging.getLogger("auth")
+
+# Load configuration from environment variables
+AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
+API_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
+ALGORITHMS = ["RS256"]
+
+if not AUTH0_DOMAIN or not API_AUDIENCE:
+    raise RuntimeError(
+        "Missing required Auth0 environment variables: AUTH0_DOMAIN or API_AUDIENCE"
+    )
+
+JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
 
 
 # --- Utility Functions ---
@@ -61,6 +68,104 @@ def get_cached_jwks() -> JsonWebKey:
         raise HTTPException(status_code=500, detail="Unable to fetch JWKS")
 
 
+def get_key_id_from_token(token: str) -> str:
+    """
+    Extract the Key ID (kid) from the JWT token header.
+
+    Args:
+        token (str): The JWT token string.
+
+    Raises:
+        HTTPException: If the 'kid' is missing from the token header.
+
+    Returns:
+        str: The Key ID found in the token header.
+    """
+    header = decode_jwt_header(token)
+    kid = header.get("kid")
+    if not kid:
+        raise HTTPException(status_code=401, detail="Token missing 'kid' in header")
+    return kid
+
+
+def get_jwks_key(kid: str):
+    """
+    Retrieve the JSON Web Key (JWK) matching the given Key ID (kid).
+
+    Attempts to get the key from a cached JWKS set and refreshes cache if needed.
+
+    Args:
+        kid (str): The Key ID to find in the JWKS.
+
+    Raises:
+        HTTPException: If no matching JWK is found.
+
+    Returns:
+        JWK: The matching JSON Web Key object.
+    """
+    try:
+        key_set = get_cached_jwks()
+        return key_set.find_by_kid(kid)
+    except ValueError:
+        # Cache might be stale, clear cache and try again
+        get_cached_jwks.cache_clear()
+        try:
+            key_set = get_cached_jwks()
+            return key_set.find_by_kid(kid)
+        except ValueError:
+            # Key still not found
+            raise HTTPException(
+                status_code=401, detail="Unable to find matching JWKS key"
+            )
+
+
+def decode_and_validate_claims(token: str, key) -> dict:
+    """
+    Decode the JWT token and validate its claims.
+
+    Args:
+        token (str): The JWT token string.
+        key (JWK): The key to decode and validate the token.
+
+    Returns:
+        dict: The decoded and validated claims from the token.
+
+    Raises:
+        jwt.exceptions.InvalidTokenError: If token validation fails.
+    """
+    claims = jwt.decode(
+        token,
+        key,
+        claims_options={
+            "iss": {"essential": True, "value": f"https://{AUTH0_DOMAIN}/"},
+            "aud": {"essential": True, "value": API_AUDIENCE},
+            "exp": {"essential": True},
+        },
+    )
+    claims.validate()
+    return claims
+
+
+def check_permissions(claims: dict):
+    """
+    Check if the JWT claims include the required permission 'read:forecast'.
+
+    Args:
+        claims (dict): The decoded JWT claims.
+
+    Raises:
+        HTTPException: If required permission 'read:forecast' is missing.
+    """
+    permissions = claims.get("permissions", [])
+    if "read:forecast" not in permissions:
+        scope = claims.get("scope", "")
+        if "read:forecast" not in scope.split():
+            raise HTTPException(
+                status_code=403,
+                detail="Token does not have required permission: read:forecast",
+            )
+
+
 def validate_token(token: str) -> dict:
     """Validate a JWT token.
 
@@ -74,62 +179,27 @@ def validate_token(token: str) -> dict:
         HTTPException: If the token is invalid or validation fails.
     """
     try:
-        header = decode_jwt_header(token)
-        kid = header.get("kid")
-        if not kid:
-            raise HTTPException(status_code=401, detail="Token missing 'kid' in header")
-
+        kid = get_key_id_from_token(token)
         logger.info(f"Token kid: {kid}")
 
-        # Attempt to find key from cached JWKS
-        key_set = get_cached_jwks()
-        key = key_set.find_by_kid(kid)
-
-        # If no key found, force refresh JWKS
-        if not key:
-            logger.warning("Key not found in cache — refreshing JWKS")
-            get_cached_jwks.cache_clear()
-            key_set = get_cached_jwks()
-            key = key_set.find_by_kid(kid)
-            if not key:
-                raise HTTPException(
-                    status_code=401, detail="Unable to find matching JWKS key"
-                )
-
+        key = get_jwks_key(kid)
         logger.info("Using key to decode JWT")
 
-        # Decode and validate claims
-        claims = jwt.decode(
-            token,
-            key,
-            claims_options={
-                "iss": {"essential": True, "value": f"https://{AUTH0_DOMAIN}/"},
-                "aud": {"essential": True, "value": API_AUDIENCE},
-                "exp": {"essential": True},
-            },
-        )
-        claims.validate()  # checks exp, nbf, etc.
+        claims = decode_and_validate_claims(token, key)
 
-        # Debug logging for claims
         logger.info("Token claims: %s", claims)
         logger.info("Raw permissions: %s", claims.get("permissions"))
         logger.info("Raw scope: %s", claims.get("scope"))
 
-        # Check for required permissions
-        permissions = claims.get("permissions", [])
-        if "read:forecast" not in permissions:
-            # If permissions is empty, check scope
-            scope = claims.get("scope", "")
-            if "read:forecast" not in scope.split():
-                raise HTTPException(
-                    status_code=403,
-                    detail="Token does not have required permission: read:forecast",
-                )
+        check_permissions(claims)
 
         logger.info(f"Token validated: subject={claims.get('sub')}")
 
         return claims
 
+    except HTTPException:
+        # Let FastAPI's own HTTP errors bubble up as-is
+        raise
     except JoseError as e:
         logger.error(f"Token verification failed: {e}")
         raise HTTPException(status_code=401, detail="Invalid token signature or claims")

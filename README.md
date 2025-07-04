@@ -57,12 +57,18 @@ AUTH0_CLIENT_SECRET=your_client_secret
 AUTH0_CALLBACK_URL=http://localhost:8000/oauth2-redirect
 ```
 
-5. Run the development server:
+## Running forecasting-backend locally for testing
+
+The API will be available at `http://localhost:8000`. Make sure your `.env` file contains all required environment variables.
+Once the server is running, you can access interactive API documentation: `http://localhost:8000/docs`
+
+### Option 1 (easiest): Run the development server directly for quick local testing:
+
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## Docker Deployment
+### Option 2: Build and run a Docker container for an isolated environment
 
 1. Build the Docker image:
 ```bash
@@ -74,9 +80,7 @@ docker build -t forecasting-api .
 docker run -p 8000:8000 --env-file .env forecasting-api
 ```
 
-The API will be available at `http://localhost:8000`. Make sure your `.env` file contains all required environment variables.
-
-## Exposing Endpoints with ngrok
+### Option 3: Use ngrok to expose your local server to the internet (handy for testing Auth0 callbacks or external integrations):
 
 To expose your local API endpoints to the internet for testing:
 
@@ -129,17 +133,6 @@ Note: The `scope` parameter is required to get a token with the necessary permis
 
 2. Copy the returned `access_token`
 
-## API Documentation
-
-Once the server is running, you can access interactive API documentation: `http://localhost:8000/docs`
-
-The API provides the following endpoints:
-
-### Get Latest Forecast
-- `GET /forecast/latest`
-- Parameters:
-  - `asset_id` (required): The asset identifier (e.g., "L9M")
-- Example: `/forecast/latest?asset_id=L9M`
 
 ## Testing
 
@@ -148,33 +141,21 @@ Run the test suite:
 pytest
 ```
 
-## Project Structure
+## Pre-Commit
 
-```
-forecasting-backend/
-├── app/
-│   ├── __init__.py
-│   ├── main.py      # FastAPI application and routes
-│   ├── auth.py      # Authentication and token validation
-│   ├── s3.py        # S3 client and forecast retrieval
-│   └── config.py    # Configuration and environment variables
-├── tests/
-│   ├── __init__.py
-│   ├── test_auth.py # Authentication tests
-│   └── test_main.py # API endpoint tests
-├── requirements.txt # Project dependencies
-└── .env            # Environment variables (create this)
+Pre-commit hooks are set-up for this repo. To run them locally:
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
 ```
 
 ## Error Handling
 
 The API returns appropriate HTTP status codes:
-- 200: Successful request
-- 401: Unauthorized (invalid or missing token)
-- 404: Forecast not found
-- 422: Invalid parameters
-- 500: Server error
-
-## License
-
-[Add your license information here]
+- 200 OK: Successful request
+- 403 Forbidden: Unauthorized (missing token)
+- 401 Unauthorized: Invalid or expired token
+- 404 Not Found: Forecast not found
+- 422 Unprocessable Entity: Invalid parameters
+- 500 Internal Server Error: Server error
