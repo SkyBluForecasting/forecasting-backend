@@ -1,6 +1,5 @@
 """S3 module for handling forecast data storage and retrieval."""
 
-import json
 import logging
 import os
 

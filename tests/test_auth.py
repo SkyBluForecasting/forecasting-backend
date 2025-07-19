@@ -2,7 +2,6 @@
 
 import os
 import sys
-from unittest.mock import MagicMock, patch
 
 import pytest
 from authlib.jose import KeySet
@@ -45,7 +44,8 @@ def test_missing_env_vars_raises_runtime_error(mocker):
         del sys.modules["app.auth"]
 
     with pytest.raises(RuntimeError) as exc_info:
-        import app.auth  # this will re-run the module top-level code
+        # this will re-run the module top-level code
+        import app.auth  # noqa: F401
 
     assert "Missing required Auth0 environment variables" in str(exc_info.value)
 
