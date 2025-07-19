@@ -25,7 +25,7 @@ jobs:
 
       - name: Copy project files to EC2 under ~/forecasting-backend
         run: |
-          rsync -avz --delete --exclude='.git' \
+          rsync -avz --delete --exclude='.git' --exclude='tests' \
             -e "ssh -o StrictHostKeyChecking=no" \
             ./ ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend
 

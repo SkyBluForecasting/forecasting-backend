@@ -141,6 +141,11 @@ Run the test suite:
 pytest
 ```
 
+To run tests and also check coverage:
+```bash
+coverage run --source=forecasting_backend -m pytest tests && coverage report -m
+```
+
 ## Pre-Commit
 
 Pre-commit hooks are set-up for this repo. To run them locally:

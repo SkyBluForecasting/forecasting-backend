@@ -13,18 +13,8 @@ client = TestClient(app)
 
 
 @pytest.fixture
-def mock_dependencies():
-    """
-    Fixture to mock external dependencies for FastAPI tests.
-
-    This includes mocking:
-    - Auth token extraction
-    - Token validation and decoding
-    - JWKS key fetching
-    - S3 client methods (get_object, list_objects_v2)
-
-    The mocks ensure tests run isolated from external services.
-    """
+def mock_dependencies(mock_s3_with_forecast):
+    """Mock auth and S3 for FastAPI endpoint tests."""
     mock_key_set = MagicMock(spec=KeySet)
     mock_key_set.find_by_kid.return_value = MagicMock()
 
@@ -35,21 +25,16 @@ def mock_dependencies():
     }.get(key, default)
     mock_claims.validate = MagicMock()
 
-    mock_s3 = MagicMock()
-    mock_s3.get_object.return_value = {
-        "Body": MagicMock(read=lambda: b'{"forecast": "test"}')
-    }
-    mock_s3.list_objects_v2.return_value = {
-        "Contents": [{"Key": "test/test/20240101.json"}]
-    }
-
     patches = [
         patch("app.main.get_token", return_value="test-token"),
         patch("app.auth.validate_token", return_value=mock_claims),
         patch("app.auth.decode_jwt_header", return_value={"kid": "test-kid"}),
         patch("app.auth.get_cached_jwks", return_value=mock_key_set),
         patch("authlib.jose.jwt.decode", return_value=mock_claims),
-        patch("app.s3.get_s3_client", return_value=mock_s3),
+        patch("app.forecast_service.get_s3_client", return_value=mock_s3_with_forecast),
+        patch(
+            "app.forecast_service.get_s3_bucket", return_value="forecasting-forecasts"
+        ),
     ]
 
     for p in patches:
@@ -69,7 +54,10 @@ class TestReadLatestForecast:
             headers={"Authorization": "Bearer test-token"},
         )
         assert response.status_code == 200
-        assert response.json() == {"forecast": "test"}
+        assert response.json() == {
+            "asset_id": "test",
+            "values": [{"timestamp": "2025-07-16T00:00:00Z", "value_kw": 123.45}],
+        }
 
     def test_missing_header_returns_403(self, mock_dependencies):
         """Returns 403 if Authorization header is missing."""
@@ -110,7 +98,6 @@ class TestReadLatestForecast:
             "/forecast/latest",  # no asset_id query parameter
             headers={"Authorization": "Bearer test-token"},
         )
-        print(response.json())
         assert response.status_code == 422
         # Optionally, check error detail includes asset_id is missing
         assert any(
