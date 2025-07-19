@@ -8,6 +8,7 @@ It can also contain shared fixtures for all tests in the test suite.
 """
 
 import io
+import os
 from unittest.mock import MagicMock
 
 import boto3
@@ -16,11 +17,10 @@ from botocore.response import StreamingBody
 from botocore.stub import Stubber
 
 
-@pytest.fixture(autouse=True)
-def set_auth0_env_vars(monkeypatch):
-    """Set the required mocked env variables before every test."""
-    monkeypatch.setenv("AUTH0_DOMAIN", "test-domain.auth0.com")
-    monkeypatch.setenv("AUTH0_AUDIENCE", "test-audience")
+def pytest_configure():
+    """Set env variables before test collection."""
+    os.environ.setdefault("AUTH0_DOMAIN", "test-domain.auth0.com")
+    os.environ.setdefault("AUTH0_AUDIENCE", "test-audience")
 
 
 @pytest.fixture
