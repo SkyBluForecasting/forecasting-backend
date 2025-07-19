@@ -13,8 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}  # or just omit this to use default
 
       - name: Configure git for tagging
         run: |
@@ -27,6 +25,7 @@ jobs:
           git push origin ${{ github.event.inputs.tag }}
 
       - name: Create GitHub release
-        run: gh release create "${{ github.event.inputs.tag }}" --generate-notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.event.inputs.tag }}" --generate-notes
