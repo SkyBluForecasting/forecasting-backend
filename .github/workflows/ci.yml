@@ -33,7 +33,7 @@ jobs:
 
     - name: Lint with Flake8 (Black-compatible)
       run: |
-        flake8 . --count --ignore=D203 --show-source --statistics
+        flake8 . --count --ignore=D203 --show-source --statistics --max-line-length=88
 
     - name: Check imports with isort
       run: |
