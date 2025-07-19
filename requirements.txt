@@ -10,7 +10,7 @@ moto  # for mocking boto3 in tests
 requests
 
 # Development dependencies
-black==23.12.1
+black==25.1.0
 isort==5.13.2
 pytest-cov==4.1.0
 pytest-mock==3.13.0
