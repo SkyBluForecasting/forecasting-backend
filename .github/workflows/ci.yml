@@ -64,9 +64,6 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov
 
-    - name: Load environment variables from ENV_FILE_STAGING
-      run: echo "${{ secrets.ENV_FILE_STAGING }}" > .env
-
     - name: Run tests with coverage (branch coverage)
       run: |
         set -a
