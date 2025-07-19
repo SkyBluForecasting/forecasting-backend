@@ -16,6 +16,13 @@ from botocore.response import StreamingBody
 from botocore.stub import Stubber
 
 
+@pytest.fixture(autouse=True)
+def set_auth0_env_vars(monkeypatch):
+    """Set the required mocked env variables before every test."""
+    monkeypatch.setenv("AUTH0_DOMAIN", "test-domain.auth0.com")
+    monkeypatch.setenv("AUTH0_AUDIENCE", "test-audience")
+
+
 @pytest.fixture
 def s3_stub_client():
     """Provide a boto3 S3 client with an activated Stubber for mocking AWS S3 calls.
