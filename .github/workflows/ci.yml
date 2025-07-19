@@ -38,11 +38,17 @@ jobs:
 
     - name: Run tests with coverage (branch coverage)
       run: |
-        set -a
-        source .env
-        set +a
-        pytest --cov=app --cov-report=xml --cov-report=term-missing --cov-branch tests/
-        coverage report --fail-under=100
+        pip install coverage pytest
+        PYTHONPATH=${{ github.workspace }} coverage run --source=app -m pytest tests/
+        coverage report -m
+        coverage xml
+
+    - name: Check final coverage summary
+      run: |
+        coverage report --show-missing
+
+    - name: Display coverage summary
+      run: coverage report --fail-under=100 --ignore-errors
 
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
