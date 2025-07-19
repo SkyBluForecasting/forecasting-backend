@@ -11,15 +11,10 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python (for sed and Python environment)
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.x'
+          token: ${{ secrets.GITHUB_TOKEN }}  # or just omit this to use default
 
       - name: Configure git for tagging
         run: |
@@ -30,10 +25,8 @@ jobs:
         run: |
           git tag ${{ github.event.inputs.tag }}
           git push origin ${{ github.event.inputs.tag }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
       - name: Create GitHub release
         run: gh release create "${{ github.event.inputs.tag }}" --generate-notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
