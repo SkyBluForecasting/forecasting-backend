@@ -12,6 +12,7 @@ moto  # for mocking boto3 in tests
 requests
 psycopg2-binary
 asyncpg
+aiosqlite
 
 # Internal Packages
 forecasting-db==1.1.0
