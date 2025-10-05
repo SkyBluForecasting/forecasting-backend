@@ -18,37 +18,56 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Set up SSH key
-        uses: webfactory/ssh-agent@v0.8.0
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
+          python-version: 3.10
 
-      - name: Prepare .env and copy to EC2
+      - name: Prepare environment and get CodeArtifact token
         run: |
-          echo "--- Export staging env vars ---"
+          echo "${{ secrets.ENV_FILE_STAGING }}" > .env
           set -a
-          echo "${{ secrets.ENV_FILE_STAGING }}" | tee temp.env >/dev/null
-          echo "DATABASE_URL=${{ secrets.SQLALCHEMY_URL }}" | tee -a temp.env >/dev/null
-          source temp.env
+          source .env
           set +a
 
-          # Copy final .env to EC2
-          scp -o StrictHostKeyChecking=no temp.env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
-          rm temp.env
+          echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" >> $GITHUB_ENV
+          echo "AWS_REGION=$AWS_REGION" >> $GITHUB_ENV
 
-      - name: SSH into EC2 and build/run Docker with CodeArtifact auth
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain skyblu \
+            --domain-owner 591082451778 \
+            --region $AWS_REGION \
+            --query authorizationToken \
+            --output text)
+          echo "CODEARTIFACT_AUTH_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+      - name: Build wheels for all dependencies
+        run: |
+          mkdir -p wheels
+          pip install --upgrade pip wheel setuptools
+          pip wheel -r requirements.txt -w wheels \
+            --index-url https://aws:${CODEARTIFACT_AUTH_TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
+            --extra-index-url https://pypi.org/simple
+
+      - name: Copy .env and wheels to EC2
+        run: |
+          scp -o StrictHostKeyChecking=no .env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
+          scp -o StrictHostKeyChecking=no -r wheels ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/wheels
+
+      - name: SSH into EC2, build Docker image, and restart container
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
             set -e
             cd ~/forecasting-backend
 
-            echo "--- STOPPING old Docker container if it exists ---"
+            echo "--- STOPPING old Docker container ---"
             docker stop forecasting-api || true
             docker rm forecasting-api || true
             docker rmi forecasting-api || true
 
-            echo "--- BUILDING Docker image (CodeArtifact token fetched inside container) ---"
-            docker build --no-cache -t forecasting-api . --progress=plain
+            echo "--- BUILDING Docker image ---"
+            docker build --no-cache -t forecasting-api .
 
             echo "--- RUNNING container ---"
             docker run -d \
