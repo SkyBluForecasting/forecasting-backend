@@ -70,7 +70,10 @@ jobs:
             docker rmi forecasting-api || true
 
             echo "--- BUILDING Docker image ---"
-            docker build -t forecasting-api .
+            docker build \
+              --build-arg CODEARTIFACT_AUTH_TOKEN=${CODEARTIFACT_AUTH_TOKEN} \
+              --build-arg AWS_REGION=${AWS_REGION} \
+              -t forecasting-api .
 
             echo "--- RUNNING container ---"
             docker run -d \
