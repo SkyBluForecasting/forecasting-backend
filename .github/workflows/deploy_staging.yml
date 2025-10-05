@@ -23,7 +23,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
 
-      - name: Prepare .env, login to CodeArtifact, and copy to EC2
+      - name: Prepare .env and AWS vars
         run: |
           # Export staging env vars for workflow
           set -a
@@ -56,10 +56,17 @@ jobs:
             'ls -l ~/forecasting-backend/.env && head -n 5 ~/forecasting-backend/.env'
 
       - name: SSH into EC2 and restart Docker container
+        env:
+          CODEARTIFACT_AUTH_TOKEN: ${{ env.CODEARTIFACT_AUTH_TOKEN }}
+          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
             set -e
             cd ~/forecasting-backend
+
+            # Export variables for Docker build
+            export CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN
+            export AWS_REGION=$AWS_REGION
 
             echo "--- CONTENTS OF ~/forecasting-backend ---"
             ls -la
