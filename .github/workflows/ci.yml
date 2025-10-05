@@ -30,6 +30,11 @@ jobs:
         source .env
         set +a
 
+        # Make AWS vars available for next steps
+        echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" >> $GITHUB_ENV
+        echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" >> $GITHUB_ENV
+        echo "AWS_REGION=$AWS_REGION" >> $GITHUB_ENV
+
         TOKEN=$(aws codeartifact get-authorization-token \
           --domain skyblu \
           --domain-owner 591082451778 \
@@ -38,6 +43,11 @@ jobs:
           --output text)
 
         echo "CODEARTIFACT_AUTH_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+    - name: Debug AWS environment
+      run: |
+        echo "AWS_REGION=$AWS_REGION"
+        echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:0:4}..."  # only partial for safety
 
     - name: Install dependencies
       run: |
