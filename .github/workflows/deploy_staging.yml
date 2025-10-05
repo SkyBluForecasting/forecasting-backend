@@ -31,7 +31,13 @@ jobs:
 
       - name: Upload .env file to EC2 root folder (~/forecasting-backend)
         run: |
+          # write the ENV_FILE_STAGING to a temp file
           echo "${{ secrets.ENV_FILE_STAGING }}" > temp.env
+
+          # append or overwrite DATABASE_URL with the secret
+          echo "DATABASE_URL=${{ secrets.SQLALCHEMY_URL }}" >> temp.env
+
+          # copy to EC2
           scp -o StrictHostKeyChecking=no temp.env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
           rm temp.env
 
