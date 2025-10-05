@@ -44,6 +44,9 @@ jobs:
 
         echo "CODEARTIFACT_AUTH_TOKEN=$TOKEN" >> $GITHUB_ENV
 
+    - name: Set DATABASE_URL for CI
+      run: echo "DATABASE_URL=sqlite+aiosqlite:///:memory:" >> $GITHUB_ENV
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip

@@ -55,6 +55,7 @@ AUTH0_ALGORITHMS=RS256
 AUTH0_CLIENT_ID=your_client_id
 AUTH0_CLIENT_SECRET=your_client_secret
 AUTH0_CALLBACK_URL=http://localhost:8000/oauth2-redirect
+
 # Database Configuration (PostgreSQL/TimescaleDB)
 DATABASE_URL = ""postgresql+asyncpg://postgres:skyblu55!@localhost:15432/appdb""
 ```
