@@ -23,30 +23,48 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
 
-      - name: Prepare .env and AWS vars
+      - name: Prepare .env, login to CodeArtifact, and copy to EC2
         run: |
-          # Export staging env vars for workflow
+          set -e
+
+          echo "--- Export staging env vars ---"
           set -a
           echo "${{ secrets.ENV_FILE_STAGING }}" | tee temp.env >/dev/null
           echo "DATABASE_URL=${{ secrets.SQLALCHEMY_URL }}" | tee -a temp.env >/dev/null
           source temp.env
           set +a
 
-          # Make AWS vars available for workflow steps
-          echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" >> $GITHUB_ENV
-          echo "AWS_REGION=$AWS_REGION" >> $GITHUB_ENV
+          echo "--- AWS environment ---"
+          echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
+          echo "AWS_SECRET_ACCESS_KEY=<hidden>"
+          echo "AWS_REGION=${AWS_REGION}"
 
-          # Get CodeArtifact token
+          echo "--- Get CodeArtifact token ---"
           TOKEN=$(aws codeartifact get-authorization-token \
             --domain skyblu \
             --domain-owner 591082451778 \
             --region $AWS_REGION \
             --query authorizationToken \
             --output text)
+          echo "Token (first 10 chars): ${TOKEN:0:10}"
+
           echo "CODEARTIFACT_AUTH_TOKEN=$TOKEN" >> $GITHUB_ENV
 
-          # Copy final .env to EC2
+          echo "--- Check CodeArtifact pip URL ---"
+          echo "https://aws:${TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/"
+
+          echo "--- Attempt dry-run install on EC2 (debug) ---"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
+            set -e
+            cd ~/forecasting-backend
+            echo "Trying pip install --dry-run for debugging..."
+            pip install forecasting-db==1.1.0 \
+              --index-url https://aws:${TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
+              --extra-index-url https://pypi.org/simple \
+              --dry-run
+          EOF
+
+          echo "--- Copy final .env to EC2 ---"
           scp -o StrictHostKeyChecking=no temp.env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
           rm temp.env
 
@@ -56,17 +74,10 @@ jobs:
             'ls -l ~/forecasting-backend/.env && head -n 5 ~/forecasting-backend/.env'
 
       - name: SSH into EC2 and restart Docker container
-        env:
-          CODEARTIFACT_AUTH_TOKEN: ${{ env.CODEARTIFACT_AUTH_TOKEN }}
-          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
             set -e
             cd ~/forecasting-backend
-
-            # Export variables for Docker build
-            export CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN
-            export AWS_REGION=$AWS_REGION
 
             echo "--- CONTENTS OF ~/forecasting-backend ---"
             ls -la
