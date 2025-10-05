@@ -50,6 +50,10 @@ jobs:
             --index-url https://aws:${CODEARTIFACT_AUTH_TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
             --extra-index-url https://pypi.org/simple
 
+      - name: Test SSH access
+        run: |
+          ssh -vvv -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} "echo success"
+
       - name: Copy .env and wheels to EC2
         run: |
           scp -o StrictHostKeyChecking=no .env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
