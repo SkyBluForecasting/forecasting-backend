@@ -5,23 +5,29 @@ import json
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 
 import requests
 from authlib.jose import JsonWebKey, jwt
 from authlib.jose.errors import JoseError
-from fastapi import HTTPException
+from dotenv import load_dotenv
+from fastapi import HTTPException, Request
 
-logger = logging.getLogger("auth")
+# Make sure we point to the .env file explicitly
+dotenv_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path)
 
-# Load configuration from environment variables
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
-API_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
-ALGORITHMS = ["RS256"]
+API_AUDIENCE = os.getenv("API_AUDIENCE")
 
 if not AUTH0_DOMAIN or not API_AUDIENCE:
     raise RuntimeError(
-        "Missing required Auth0 environment variables: AUTH0_DOMAIN or API_AUDIENCE"
+        "Missing required Auth0 environment variables: "
+        f"AUTH0_DOMAIN={AUTH0_DOMAIN}, API_AUDIENCE={API_AUDIENCE}"
     )
+
+logger = logging.getLogger("auth")
+ALGORITHMS = ["RS256"]
 
 JWKS_URL = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
 
@@ -206,3 +212,11 @@ def validate_token(token: str) -> dict:
     except Exception as e:
         logger.exception("Unexpected error during token validation")
         raise HTTPException(status_code=401, detail=str(e))
+
+
+def get_token(request: Request) -> str:
+    """Extract Bearer token from Authorization header."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=403, detail="Not authenticated")
+    return auth_header.split(" ")[1]

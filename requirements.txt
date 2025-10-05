@@ -1,5 +1,7 @@
+# Packages
 fastapi
 uvicorn
+sqlalchemy
 boto3
 python-jose[cryptography]
 authlib
@@ -8,6 +10,12 @@ pytest
 httpx
 moto  # for mocking boto3 in tests
 requests
+psycopg2-binary
+asyncpg
+
+# Internal Packages
+forecasting-db==1.1.0
+
 
 # Development dependencies
 black==25.1.0

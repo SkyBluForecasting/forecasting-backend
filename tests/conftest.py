@@ -21,6 +21,12 @@ def pytest_configure():
     """Set env variables before test collection."""
     os.environ.setdefault("AUTH0_DOMAIN", "test-domain.auth0.com")
     os.environ.setdefault("AUTH0_AUDIENCE", "test-audience")
+    # Database environment variables for testing
+    os.environ.setdefault("DB_HOST", "localhost")
+    os.environ.setdefault("DB_PORT", "5432")
+    os.environ.setdefault("DB_NAME", "test_forecasting")
+    os.environ.setdefault("DB_USER", "test_user")
+    os.environ.setdefault("DB_PASSWORD", "test_password")
 
 
 @pytest.fixture
