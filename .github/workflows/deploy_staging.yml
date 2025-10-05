@@ -23,25 +23,34 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
 
-      - name: Copy project files to EC2 under ~/forecasting-backend
+      - name: Prepare .env, login to CodeArtifact, and copy to EC2
         run: |
-          rsync -avz --delete --exclude='.git' --exclude='tests' \
-            -e "ssh -o StrictHostKeyChecking=no" \
-            ./ ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend
+          # Export staging env vars for workflow
+          set -a
+          echo "${{ secrets.ENV_FILE_STAGING }}" | tee temp.env >/dev/null
+          echo "DATABASE_URL=${{ secrets.SQLALCHEMY_URL }}" | tee -a temp.env >/dev/null
+          source temp.env
+          set +a
 
-      - name: Upload .env file to EC2 root folder (~/forecasting-backend)
-        run: |
-          # write the ENV_FILE_STAGING to a temp file
-          echo "${{ secrets.ENV_FILE_STAGING }}" > temp.env
+          # Make AWS vars available for workflow steps
+          echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" >> $GITHUB_ENV
+          echo "AWS_REGION=$AWS_REGION" >> $GITHUB_ENV
 
-          # append or overwrite DATABASE_URL with the secret
-          echo "DATABASE_URL=${{ secrets.SQLALCHEMY_URL }}" >> temp.env
+          # Get CodeArtifact token
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain skyblu \
+            --domain-owner 591082451778 \
+            --region $AWS_REGION \
+            --query authorizationToken \
+            --output text)
+          echo "CODEARTIFACT_AUTH_TOKEN=$TOKEN" >> $GITHUB_ENV
 
-          # copy to EC2
+          # Copy final .env to EC2
           scp -o StrictHostKeyChecking=no temp.env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
           rm temp.env
 
-      - name: Confirm .env exists on EC2 root folder
+      - name: Confirm .env exists on EC2
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
             'ls -l ~/forecasting-backend/.env && head -n 5 ~/forecasting-backend/.env'
@@ -61,7 +70,10 @@ jobs:
             docker rmi forecasting-api || true
 
             echo "--- BUILDING Docker image ---"
-            docker build -t forecasting-api .
+            docker build \
+              --build-arg CODEARTIFACT_AUTH_TOKEN=${CODEARTIFACT_AUTH_TOKEN} \
+              --build-arg AWS_REGION=${AWS_REGION} \
+              -t forecasting-api .
 
             echo "--- RUNNING container ---"
             docker run -d \

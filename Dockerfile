@@ -10,8 +10,15 @@ RUN apt-get update && apt-get install -y build-essential
 # Copy files
 COPY . /app
 
-# Install dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# Accept CodeArtifact token and AWS region as build args
+ARG CODEARTIFACT_AUTH_TOKEN
+ARG AWS_REGION
+
+# Install dependencies using CodeArtifact token
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt \
+      --index-url https://aws:${CODEARTIFACT_AUTH_TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
+      --extra-index-url https://pypi.org/simple
 
 # Expose FastAPI port
 EXPOSE 8000
