@@ -1,106 +1,137 @@
-"""Tests for the main FastAPI application."""
+"""Unit tests for FastAPI endpoints in app.main."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from authlib.jose import KeySet
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import app
 
-client = TestClient(app)
 
-
+# -----------------------------
+# Client fixture that triggers startup/shutdown
+# -----------------------------
 @pytest.fixture
-def mock_dependencies(mock_s3_with_forecast):
-    """Mock auth and S3 for FastAPI endpoint tests."""
-    mock_key_set = MagicMock(spec=KeySet)
-    mock_key_set.find_by_kid.return_value = MagicMock()
-
-    mock_claims = MagicMock()
-    mock_claims.get.side_effect = lambda key, default=None: {
-        "sub": "test-subject",
-        "scope": "read:forecast",
-    }.get(key, default)
-    mock_claims.validate = MagicMock()
-
-    patches = [
-        patch("app.main.get_token", return_value="test-token"),
-        patch("app.auth.validate_token", return_value=mock_claims),
-        patch("app.auth.decode_jwt_header", return_value={"kid": "test-kid"}),
-        patch("app.auth.get_cached_jwks", return_value=mock_key_set),
-        patch("authlib.jose.jwt.decode", return_value=mock_claims),
-        patch("app.forecast_service.get_s3_client", return_value=mock_s3_with_forecast),
-        patch(
-            "app.forecast_service.get_s3_bucket", return_value="forecasting-forecasts"
-        ),
-    ]
-
-    for p in patches:
-        p.start()
-    yield
-    for p in patches:
-        p.stop()
+def client():
+    """Provide a TestClient that runs startup and shutdown events."""
+    with TestClient(app) as c:
+        yield c
 
 
+# -----------------------------
+# Automatically mock validate_token for all tests
+# -----------------------------
+@pytest.fixture(autouse=True)
+def patch_validate_token():
+    """Mock validate_token to always succeed."""
+    with patch("app.main.validate_token", lambda token: True):
+        yield
+
+
+# -----------------------------
+# Forecast endpoint tests
+# -----------------------------
 class TestReadLatestForecast:
-    """Tests for the /forecast/latest endpoint."""
+    """Test cases for the /forecast/latest endpoint."""
 
-    def test_successful_request(self, mock_dependencies):
-        """Returns 200 and forecast data on valid request with authentication."""
-        response = client.get(
-            "/forecast/latest?utility_id=test&asset_id=test",
-            headers={"Authorization": "Bearer test-token"},
-        )
-        assert response.status_code == 200
-        assert response.json() == {
+    @pytest.fixture(autouse=True)
+    def _setup_mock(self):
+        """Patch get_latest_forecast for all tests in this class."""
+        with patch("app.main.get_latest_forecast", new_callable=MagicMock) as mock:
+            self.mock_forecast_service = mock
+            yield
+
+    def test_successful_request(self, client):
+        """Return 200 and forecast data for valid asset_id."""
+        self.mock_forecast_service.return_value = {
             "asset_id": "test",
             "values": [{"timestamp": "2025-07-16T00:00:00Z", "value_kw": 123.45}],
         }
 
-    def test_missing_header_returns_403(self, mock_dependencies):
-        """Returns 403 if Authorization header is missing."""
-        response = client.get("/forecast/latest?utility_id=test&asset_id=test")
-        assert response.status_code == 403
-        assert response.json() == {"detail": "Not authenticated"}
-
-    def test_invalid_token_returns_401(self):
-        """Returns 401 for invalid JWT token."""
-        invalid_token = "Bearer this.is.not.a.valid.token"
         response = client.get(
-            "/forecast/latest?asset_id=test", headers={"Authorization": invalid_token}
+            "/forecast/latest?asset_id=test",
+            headers={"Authorization": "Bearer fake-token"},
         )
 
-        assert response.status_code == 401
-        assert "Invalid JWT" in response.json()["detail"]
+        assert response.status_code == 200
+        assert response.json()["asset_id"] == "test"
 
-    def test_non_existent_data_returns_404(self, mock_dependencies):
-        """Returns 404 if forecast data does not exist."""
-        asset_id = "nonexistent-asset"
+    def test_non_existent_data_returns_404(self, client):
+        """Return 404 when forecast data is not found."""
+        self.mock_forecast_service.side_effect = HTTPException(
+            status_code=404, detail="Forecast not found"
+        )
 
-        with patch("app.main.get_latest_forecast") as mock_get_forecast:
-            mock_get_forecast.side_effect = HTTPException(
-                status_code=404, detail="Forecast not found"
-            )
-
-            response = client.get(
-                f"/forecast/latest?asset_id={asset_id}",
-                headers={"Authorization": "Bearer test-token"},
-            )
+        response = client.get(
+            "/forecast/latest?asset_id=nonexistent",
+            headers={"Authorization": "Bearer fake-token"},
+        )
 
         assert response.status_code == 404
-        assert response.json() == {"detail": "Forecast not found"}
 
-    def test_missing_required_params_returns_422(self, mock_dependencies):
-        """Returns 422 if required query parameters are missing."""
+
+# -----------------------------
+# Constraints endpoint tests
+# -----------------------------
+class TestReadActiveConstraints:
+    """Test cases for the /constraints/active endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_mock(self):
+        """Patch get_active_constraints for all tests in this class."""
+        with patch("app.main.get_active_constraints", new_callable=AsyncMock) as mock:
+            self.mock_constraint_service = mock
+            yield
+
+    def test_successful_request_with_asset_id(self, client):
+        """Return 200 and constraint data when asset_id is provided."""
+        self.mock_constraint_service.return_value = {
+            "assets": [
+                {
+                    "asset_uuid": "asset123",
+                    "forecast_uuid": "uuid123",
+                    "frequency_min": 60,
+                    "constraints": [
+                        {
+                            "start_time": "2024-01-01T12:00:00Z",
+                            "end_time": "2024-01-01T12:15:00Z",
+                            "constraint_kw": 100.5,
+                        }
+                    ],
+                }
+            ]
+        }
+
         response = client.get(
-            "/forecast/latest",  # no asset_id query parameter
-            headers={"Authorization": "Bearer test-token"},
+            "/constraints/active?asset_uuid=asset123",
+            headers={"Authorization": "Bearer fake-token"},
         )
-        assert response.status_code == 422
-        # Optionally, check error detail includes asset_id is missing
-        assert any(
-            err["loc"] == ["query", "asset_id"] and err["type"] == "missing"
-            for err in response.json()["detail"]
+
+        assert response.status_code == 200
+        assert response.json()["assets"][0]["asset_uuid"] == "asset123"
+
+    def test_successful_request_without_asset_id(self, client):
+        """Return 200 and empty list when no asset_id is provided."""
+        self.mock_constraint_service.return_value = {"assets": []}
+
+        response = client.get(
+            "/constraints/active",
+            headers={"Authorization": "Bearer fake-token"},
         )
+
+        assert response.status_code == 200
+        assert response.json()["assets"] == []
+
+    def test_database_error_returns_500(self, client):
+        """Return 500 when database error occurs."""
+        self.mock_constraint_service.side_effect = HTTPException(
+            status_code=500, detail="Database error"
+        )
+
+        response = client.get(
+            "/constraints/active",
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 500

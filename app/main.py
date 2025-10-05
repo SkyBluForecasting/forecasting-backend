@@ -1,12 +1,19 @@
 """Main FastAPI application module for serving forecast endpoints."""
 
 import logging
+from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .auth import validate_token
+from .constraint_service import get_active_constraints
+from .db_client import close_db_pool
 from .forecast_service import get_latest_forecast
+from .schemas import ActiveConstraintsResponse
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +22,13 @@ app = FastAPI(
     description="API for serving solar/load forecasts",
     version="1.0.0",
 )
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connections on app shutdown."""
+    await close_db_pool()
+
 
 security = HTTPBearer()
 
@@ -63,3 +77,17 @@ def read_latest_forecast(asset_id: str, token: str = Depends(get_token)):
     """
     validate_token(token)
     return get_latest_forecast(asset_id)
+
+
+@app.get(
+    "/constraints/active",
+    response_model=ActiveConstraintsResponse,
+    summary="Get active constraints for assets",
+    description="Returns a list of active constraints grouped by asset.",
+)
+async def read_active_constraints(
+    asset_uuid: Optional[str] = None, token: str = Depends(get_token)
+):
+    """Fetch active constraints for all assets or a specific asset."""
+    validate_token(token)
+    return await get_active_constraints(asset_uuid)

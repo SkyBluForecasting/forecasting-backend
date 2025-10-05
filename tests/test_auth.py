@@ -5,14 +5,20 @@ import sys
 
 import pytest
 from authlib.jose import KeySet
+from authlib.jose import jwt as jose_jwt
 from authlib.jose.errors import JoseError
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from app.auth import (
+    API_AUDIENCE,
+    AUTH0_DOMAIN,
     check_permissions,
+    decode_and_validate_claims,
+    decode_jwt_header,
     get_cached_jwks,
     get_jwks_key,
     get_key_id_from_token,
+    get_token,
     validate_token,
 )
 
@@ -255,3 +261,85 @@ class TestValidateToken:
             validate_token("some-token")
         assert exc.value.status_code == 401
         assert "Unexpected" in exc.value.detail
+
+
+class TestGetToken:
+    """Tests for the get_token function."""
+
+    def test_get_token_success(self):
+        """Should return token string when Authorization header is valid."""
+        req = Request(
+            scope={"type": "http", "headers": [(b"authorization", b"Bearer abc123")]}
+        )
+        token = get_token(req)
+        assert token == "abc123"
+
+    def test_get_token_missing_header(self):
+        """Should raise 403 when Authorization header is missing."""
+        req = Request(scope={"type": "http", "headers": []})
+        with pytest.raises(HTTPException) as exc:
+            get_token(req)
+        assert exc.value.status_code == 403
+
+    def test_get_token_invalid_header(self):
+        """Should raise 403 when Authorization header is invalid."""
+        req = Request(
+            scope={"type": "http", "headers": [(b"authorization", b"Basic abc123")]}
+        )
+        with pytest.raises(HTTPException) as exc:
+            get_token(req)
+        assert exc.value.status_code == 403
+
+
+class TestDecodeAndValidateClaims:
+    """Tests for the decode_and_validate_claims function."""
+
+    def test_decode_and_validate_claims_invalid_claims(self, mocker):
+        """Should raise when jwt.decode returns invalid claims."""
+
+        class BadClaims(dict):
+            """Mock claims that fail validation."""
+
+            def validate(self):
+                """Raise an exception."""
+                raise Exception("Invalid claims")
+
+        mocker.patch("app.auth.jwt.decode", return_value=BadClaims())
+
+        with pytest.raises(Exception, match="Invalid claims"):
+            decode_and_validate_claims("fake-token", "fake-key")
+
+    def test_decode_and_validate_claims_returns_claims(self):
+        """Ensure decode_and_validate_claims returns claims on a valid token."""
+        # Create a minimal valid token with claims matching our validation
+        header = {"alg": "HS256", "typ": "JWT"}
+        claims = {
+            "iss": f"https://{AUTH0_DOMAIN}/",
+            "aud": API_AUDIENCE,
+            "exp": 9999999999,
+            "sub": "user123",
+        }
+
+        # Use a simple symmetric key for testing
+        key = b"secret"
+        token = jose_jwt.encode(header, claims, key)
+
+        # Decode using our function
+        decoded_claims = decode_and_validate_claims(token, key)
+
+        assert decoded_claims["sub"] == "user123"
+        assert decoded_claims["aud"] == API_AUDIENCE
+
+
+class TestDecodeJWTHeader:
+    """Tests for the decode_jwt_header function."""
+
+    def test_decode_jwt_header_invalid_token(self):
+        """Should raise HTTPException if token header is invalid / cannot be decoded."""
+        invalid_token = "not.a.valid.jwt"
+
+        with pytest.raises(HTTPException) as exc_info:
+            decode_jwt_header(invalid_token)
+
+        assert exc_info.value.status_code == 401
+        assert "Invalid JWT header" in exc_info.value.detail

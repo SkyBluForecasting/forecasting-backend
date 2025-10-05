@@ -37,7 +37,7 @@ source venv/bin/activate  # On Windows, use: venv\Scripts\activate
 
 3. Install dependencies:
 ```bash
-pip install -r requirements.txt
+./install_requirements.sh
 ```
 
 4. Create a `.env` file in the root directory with your configuration:
@@ -50,11 +50,14 @@ S3_BUCKET=forecasting-forecasts
 
 # Auth0 Configuration
 AUTH0_DOMAIN=your-auth0-domain.auth0.com
-AUTH0_AUDIENCE=https://forecasting-api.forecasting
+API_AUDIENCE=https://forecasting-api.forecasting
 AUTH0_ALGORITHMS=RS256
 AUTH0_CLIENT_ID=your_client_id
 AUTH0_CLIENT_SECRET=your_client_secret
 AUTH0_CALLBACK_URL=http://localhost:8000/oauth2-redirect
+
+# Database Configuration (PostgreSQL/TimescaleDB)
+DATABASE_URL = ""postgresql+asyncpg://postgres:skyblu55!@localhost:15432/appdb""
 ```
 
 ## Running forecasting-backend locally for testing
@@ -143,7 +146,7 @@ pytest
 
 To run tests and also check coverage:
 ```bash
-coverage run --source=forecasting_backend -m pytest tests && coverage report -m
+coverage run --source=app -m pytest tests && coverage report -m
 ```
 
 ## Pre-Commit
