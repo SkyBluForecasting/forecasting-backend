@@ -13,8 +13,10 @@ COPY . /app
 # Copy pre-built wheels
 COPY wheels /wheels
 
-# Install dependencies from wheels (no AWS needed)
-RUN pip install --no-index --find-links=/wheels -r requirements.txt
+# Install dependencies from wheels (no network needed, no token)
+RUN pip install --upgrade pip && \
+    pip install /wheels/* && \
+    rm -rf /wheels
 
 # Expose FastAPI port
 EXPOSE 8000

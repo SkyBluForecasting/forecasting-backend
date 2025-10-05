@@ -45,7 +45,7 @@ jobs:
       - name: Build wheels for all dependencies
         run: |
           mkdir -p wheels
-          pip install --upgrade pip wheel setuptools
+          python -m pip install --upgrade pip wheel setuptools
           pip wheel -r requirements.txt -w wheels \
             --index-url https://aws:${CODEARTIFACT_AUTH_TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
             --extra-index-url https://pypi.org/simple
