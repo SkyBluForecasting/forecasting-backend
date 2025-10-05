@@ -18,11 +18,17 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      # ---------------- SSH Setup ----------------
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.8.0
         with:
-          python-version: '3.10'
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY_STAGING }}
 
+      - name: Test SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} "echo SSH connection successful"
+
+      # ---------------- Env + CodeArtifact ----------------
       - name: Prepare environment and get CodeArtifact token
         run: |
           echo "${{ secrets.ENV_FILE_STAGING }}" > .env
@@ -42,6 +48,7 @@ jobs:
             --output text)
           echo "CODEARTIFACT_AUTH_TOKEN=$TOKEN" >> $GITHUB_ENV
 
+      # ---------------- Build wheels locally ----------------
       - name: Build wheels for all dependencies
         run: |
           mkdir -p wheels
@@ -50,11 +57,13 @@ jobs:
             --index-url https://aws:${CODEARTIFACT_AUTH_TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
             --extra-index-url https://pypi.org/simple
 
+      # ---------------- Copy artifacts to EC2 ----------------
       - name: Copy .env and wheels to EC2
         run: |
           scp -o StrictHostKeyChecking=no .env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
           scp -o StrictHostKeyChecking=no -r wheels ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/wheels
 
+      # ---------------- SSH into EC2 & deploy ----------------
       - name: SSH into EC2, build Docker image, and restart container
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
@@ -66,8 +75,11 @@ jobs:
             docker rm forecasting-api || true
             docker rmi forecasting-api || true
 
-            echo "--- BUILDING Docker image ---"
-            docker build --no-cache -t forecasting-api .
+            echo "--- BUILDING Docker image using wheels ---"
+            docker build --no-cache \
+              --build-arg CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN \
+              --build-arg AWS_REGION=$AWS_REGION \
+              -t forecasting-api .
 
             echo "--- RUNNING container ---"
             docker run -d \
