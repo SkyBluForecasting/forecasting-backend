@@ -1,4 +1,4 @@
-name: Deploy to Staging
+name: Deploy to Staging (Debug)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,6 @@ jobs:
       - name: Prepare .env, login to CodeArtifact, and copy to EC2
         run: |
           set -e
-
           echo "--- Export staging env vars ---"
           set -a
           echo "${{ secrets.ENV_FILE_STAGING }}" | tee temp.env >/dev/null
@@ -35,9 +34,9 @@ jobs:
           set +a
 
           echo "--- AWS environment ---"
-          echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}"
-          echo "AWS_SECRET_ACCESS_KEY=<hidden>"
-          echo "AWS_REGION=${AWS_REGION}"
+          echo "AWS_ACCESS_KEY_ID=***"
+          echo "AWS_SECRET_ACCESS_KEY=***"
+          echo "AWS_REGION=$AWS_REGION"
 
           echo "--- Get CodeArtifact token ---"
           TOKEN=$(aws codeartifact get-authorization-token \
@@ -48,55 +47,34 @@ jobs:
             --output text)
           echo "Token (first 10 chars): ${TOKEN:0:10}"
 
+          # Save token for SSH session
           echo "CODEARTIFACT_AUTH_TOKEN=$TOKEN" >> $GITHUB_ENV
 
-          echo "--- Check CodeArtifact pip URL ---"
-          echo "https://aws:${TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/"
-
-          echo "--- Attempt dry-run install on EC2 (debug) ---"
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
-            set -e
-            cd ~/forecasting-backend
-            echo "Trying pip install --dry-run for debugging..."
-            pip install forecasting-db==1.1.0 \
-              --index-url https://aws:${TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
-              --extra-index-url https://pypi.org/simple \
-              --dry-run
-          EOF
-
-          echo "--- Copy final .env to EC2 ---"
+          # Copy .env to EC2
           scp -o StrictHostKeyChecking=no temp.env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
           rm temp.env
 
-      - name: Confirm .env exists on EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} \
-            'ls -l ~/forecasting-backend/.env && head -n 5 ~/forecasting-backend/.env'
-
-      - name: SSH into EC2 and restart Docker container
+      - name: SSH into EC2 and debug pip install
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
             set -e
             cd ~/forecasting-backend
 
-            echo "--- CONTENTS OF ~/forecasting-backend ---"
-            ls -la
+            echo "--- EC2 Python version ---"
+            python3 --version
 
-            echo "--- STOPPING old Docker container if it exists ---"
-            docker stop forecasting-api || true
-            docker rm forecasting-api || true
-            docker rmi forecasting-api || true
+            echo "--- EC2 pip version ---"
+            python3 -m pip --version || echo "pip not found"
 
-            echo "--- BUILDING Docker image ---"
-            docker build --no-cache \
-              --build-arg CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN \
-              --build-arg AWS_REGION=$AWS_REGION \
-              -t forecasting-api .
+            echo "--- PATH ---"
+            echo \$PATH
 
-            echo "--- RUNNING container ---"
-            docker run -d \
-              --name forecasting-api \
-              --env-file .env \
-              -p 80:8000 \
-              forecasting-api
+            echo "--- Attempt dry-run install of forecasting-db ---"
+            python3 -m pip install forecasting-db==1.1.0 \
+              --index-url https://aws:${TOKEN}@skyblu-591082451778.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/forecasting-db/simple/ \
+              --extra-index-url https://pypi.org/simple \
+              --dry-run
+
+            echo "--- List installed packages ---"
+            python3 -m pip list
           EOF
