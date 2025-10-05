@@ -57,7 +57,7 @@ jobs:
 
       - name: SSH into EC2 and restart Docker container
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
             set -e
             cd ~/forecasting-backend
 
@@ -70,9 +70,9 @@ jobs:
             docker rmi forecasting-api || true
 
             echo "--- BUILDING Docker image ---"
-            docker build \
-              --build-arg CODEARTIFACT_AUTH_TOKEN=${CODEARTIFACT_AUTH_TOKEN} \
-              --build-arg AWS_REGION=${AWS_REGION} \
+            docker build --no-cache \
+              --build-arg CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN \
+              --build-arg AWS_REGION=$AWS_REGION \
               -t forecasting-api .
 
             echo "--- RUNNING container ---"
