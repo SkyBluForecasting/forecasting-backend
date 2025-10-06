@@ -12,7 +12,7 @@ COPY wheels ./wheels
 
 # Install dependencies from local wheels (no CodeArtifact access needed)
 RUN pip install --upgrade pip && \
-    pip install --no-index --find-links=./wheels -r requirements.txt
+    pip install --find-links=./wheels -r requirements.txt
 
 EXPOSE 8000
 
