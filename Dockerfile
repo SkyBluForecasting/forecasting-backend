@@ -4,14 +4,13 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy source code
+# Copy everything
 COPY . .
 
-# Copy prebuilt wheels from CI
-# (these should already exist on the EC2 host when building)
+# Copy prebuilt wheels built by GitHub Actions
 COPY wheels ./wheels
 
-# Upgrade pip and install wheels directly
+# Install dependencies from local wheels (no CodeArtifact access needed)
 RUN pip install --upgrade pip && \
     pip install --no-index --find-links=./wheels -r requirements.txt
 
