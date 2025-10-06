@@ -80,10 +80,6 @@ jobs:
             docker rmi forecasting-api || true
 
             echo "--- BUILDING Docker image ---"
-
-            echo "--- DEBUG: showing files in build context ---"
-            ls -R | head -n 50
-
             docker build --no-cache -t forecasting-api . \
               --build-arg CODEARTIFACT_AUTH_TOKEN=${CODEARTIFACT_AUTH_TOKEN}
 
@@ -91,6 +87,7 @@ jobs:
             docker run -d \
               --name forecasting-api \
               --env-file .env \
+              -e DATABASE_URL=${{ secrets.SQLALCHEMY_URL }} \
               -p 80:8000 \
               forecasting-api
           EOF
