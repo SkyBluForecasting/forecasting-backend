@@ -64,6 +64,10 @@ jobs:
           scp -o StrictHostKeyChecking=no .env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
           scp -o StrictHostKeyChecking=no -r wheels ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/wheels
 
+      - name: Copy Dockerfile to EC2
+        run: |
+          scp -o StrictHostKeyChecking=no Dockerfile ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/Dockerfile
+
       - name: SSH into EC2, build Docker image, and restart container
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
