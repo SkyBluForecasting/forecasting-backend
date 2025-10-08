@@ -60,22 +60,17 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} "echo success"
 
-      - name: SSH into EC2, build Docker image, and restart container
+      - name: Copy source code and wheels to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
-            set -e
-            cd ~/forecasting-backend
-
-            echo "--- CLEAN UP LOCAL REPO ---"
-            git fetch --all --tags
-            git reset --hard ${{ github.event.inputs.tag }}
-
-            echo "--- COPY PREBUILT WHEELS ---"
-            mkdir -p wheels
-          EOF
+          scp -o StrictHostKeyChecking=no -r . ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/
           scp -o StrictHostKeyChecking=no -r wheels/* ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/wheels/
 
+      - name: Build Docker image and restart container
+        run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
+            cd ~/forecasting-backend
+            set -e
+
             echo "--- STOPPING OLD CONTAINER ---"
             docker stop forecasting-api || true
             docker rm forecasting-api || true
@@ -89,7 +84,7 @@ jobs:
             docker run -d \
               --name forecasting-api \
               --env-file .env \
-              -e DATABASE_URL=${{ secrets.SQLALCHEMY_URL }} \
+              -e DATABASE_URL=${SQLALCHEMY_URL} \
               -p 80:8000 \
               forecasting-api
-          EOF
+            EOF
