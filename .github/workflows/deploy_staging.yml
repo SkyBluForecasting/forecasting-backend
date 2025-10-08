@@ -67,7 +67,7 @@ jobs:
 
       - name: Build Docker image and restart container
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
             cd ~/forecasting-backend
             set -e
 
@@ -84,7 +84,7 @@ jobs:
             docker run -d \
               --name forecasting-api \
               --env-file .env \
-              -e DATABASE_URL=${SQLALCHEMY_URL} \
+              -e DATABASE_URL=${{ secrets.SQLALCHEMY_URL }} \
               -p 80:8000 \
               forecasting-api
           EOF
