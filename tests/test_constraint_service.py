@@ -68,9 +68,7 @@ async def test_get_active_constraints_calls_db():
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-    with patch(
-        "app.constraint_service.AsyncSessionLocal", return_value=async_mock_session
-    ):
+    with patch("app.constraint_service.AsyncSessionLocal", return_value=async_mock_session):
         result = await get_active_constraints("asset123")
 
     assert "assets" in result

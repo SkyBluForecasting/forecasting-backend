@@ -54,13 +54,9 @@ async def get_token(
     raw_auth_header = request.headers.get("Authorization")
     logger.info(f"Raw Authorization header: {repr(raw_auth_header)}")
 
-    token = (
-        credentials.credentials.strip()
-    )  # FastAPI's HTTPBearer already strips "Bearer "
+    token = credentials.credentials.strip()  # FastAPI's HTTPBearer already strips "Bearer "
 
-    logger.info(
-        f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}"
-    )
+    logger.info(f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}")
 
     return token
 

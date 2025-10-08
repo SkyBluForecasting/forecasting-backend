@@ -37,9 +37,7 @@ async def test_get_all_measurements_basic_formatting():
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-    with patch(
-        "app.measurement_service.AsyncSessionLocal", return_value=async_mock_session
-    ):
+    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session):
         result = await get_all_measurements(
             "asset123",
             datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -65,9 +63,7 @@ async def test_get_all_measurements_empty():
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-    with patch(
-        "app.measurement_service.AsyncSessionLocal", return_value=async_mock_session
-    ):
+    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session):
         result = await get_all_measurements(
             "asset123",
             datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -94,9 +90,7 @@ async def test_get_all_measurements_single_metric():
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-    with patch(
-        "app.measurement_service.AsyncSessionLocal", return_value=async_mock_session
-    ):
+    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session):
         result = await get_all_measurements(
             "asset123",
             datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),

@@ -47,9 +47,7 @@ async def get_forecast_rows(forecast_uuid: str):
         result = await session.execute(q)
         rows = result.mappings().all()
         # Return datetime objects, not ISO strings
-        return [
-            {"timestamp": r["timestamp"], "forecast_kw": r["forecast_kw"]} for r in rows
-        ]
+        return [{"timestamp": r["timestamp"], "forecast_kw": r["forecast_kw"]} for r in rows]
 
 
 # TODO: Remove the following S3-related code after

@@ -74,8 +74,7 @@ async def get_active_constraints(asset_uuid: Optional[str] = None) -> dict:
 
         # End time expression
         end_time_expr = (
-            Constraints.timestamp
-            + cast(lf.c.frequency_min, Integer) * text("interval '1 minute'")
+            Constraints.timestamp + cast(lf.c.frequency_min, Integer) * text("interval '1 minute'")
         ).label("end_time")
 
         # Join constraints with latest forecasts

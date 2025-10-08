@@ -35,9 +35,7 @@ async def test_get_db_yields_session(monkeypatch):
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
 
-    monkeypatch.setattr(
-        db_client, "AsyncSessionLocal", lambda: AsyncSessionContextManager()
-    )
+    monkeypatch.setattr(db_client, "AsyncSessionLocal", lambda: AsyncSessionContextManager())
 
     gen = db_client.get_db()
     session = await gen.__anext__()

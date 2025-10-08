@@ -43,9 +43,7 @@ class TestGetActiveForecast:
         async_mock_session = AsyncMock()
         async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-        with patch(
-            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
-        ):
+        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
             result = await get_active_forecast("asset123")
 
         assert result["forecast_uuid"] == UUID("11111111-1111-1111-1111-111111111111")
@@ -60,9 +58,7 @@ class TestGetActiveForecast:
         async_mock_session = AsyncMock()
         async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-        with patch(
-            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
-        ):
+        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
             result = await get_active_forecast("asset123")
 
         assert result is None
@@ -91,12 +87,8 @@ class TestGetForecastRows:
         async_mock_session = AsyncMock()
         async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-        with patch(
-            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
-        ):
-            result = await get_forecast_rows(
-                UUID("11111111-1111-1111-1111-111111111111")
-            )
+        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
+            result = await get_forecast_rows(UUID("11111111-1111-1111-1111-111111111111"))
 
         assert len(result) == 2
         assert result[0]["timestamp"].hour == 12
@@ -112,12 +104,8 @@ class TestGetForecastRows:
         async_mock_session = AsyncMock()
         async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-        with patch(
-            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
-        ):
-            result = await get_forecast_rows(
-                UUID("11111111-1111-1111-1111-111111111111")
-            )
+        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
+            result = await get_forecast_rows(UUID("11111111-1111-1111-1111-111111111111"))
 
         assert result == []
 
@@ -146,9 +134,9 @@ class TestLoadLatestForecastDataFromS3:
 
     def test_returns_csv_string(self, mock_s3_with_forecast, set_s3_env):
         """Successfully fetches and returns CSV content as string from mocked S3."""
-        with patch(
-            "app.forecast_service.get_s3_client", return_value=mock_s3_with_forecast
-        ), patch("app.forecast_service.get_s3_bucket", return_value="my-test-bucket"):
+        with patch("app.forecast_service.get_s3_client", return_value=mock_s3_with_forecast), patch(
+            "app.forecast_service.get_s3_bucket", return_value="my-test-bucket"
+        ):
 
             content = load_latest_forecast_data_from_s3("test")
             assert "datetime" in content
@@ -159,9 +147,9 @@ class TestLoadLatestForecastDataFromS3:
         empty_mock = MagicMock()
         empty_mock.list_objects_v2.return_value = {}
 
-        with patch(
-            "app.forecast_service.get_s3_client", return_value=empty_mock
-        ), patch("app.forecast_service.get_s3_bucket", return_value="my-test-bucket"):
+        with patch("app.forecast_service.get_s3_client", return_value=empty_mock), patch(
+            "app.forecast_service.get_s3_bucket", return_value="my-test-bucket"
+        ):
 
             with pytest.raises(HTTPException) as exc:
                 load_latest_forecast_data_from_s3("test")
@@ -175,12 +163,10 @@ class TestGetLatestForecast:
 
     def test_get_latest_forecast_success(self, mock_s3_with_forecast, set_s3_env):
         """Returns the correct structured forecast dict for a valid asset id."""
-        with patch(
-            "app.forecast_service.get_s3_client", return_value=mock_s3_with_forecast
-        ), patch("app.forecast_service.get_s3_bucket", return_value="my-test-bucket"):
+        with patch("app.forecast_service.get_s3_client", return_value=mock_s3_with_forecast), patch(
+            "app.forecast_service.get_s3_bucket", return_value="my-test-bucket"
+        ):
 
             result = get_latest_forecast("test")
             assert result["asset_id"] == "test"
-            assert result["values"] == [
-                {"timestamp": "2025-07-16T00:00:00Z", "value_kw": 123.45}
-            ]
+            assert result["values"] == [{"timestamp": "2025-07-16T00:00:00Z", "value_kw": 123.45}]
