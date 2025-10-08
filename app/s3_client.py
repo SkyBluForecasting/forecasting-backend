@@ -25,9 +25,7 @@ def get_s3_bucket():
     """
     bucket = os.getenv("S3_BUCKET")
     if not bucket:
-        raise HTTPException(
-            status_code=500, detail="S3_BUCKET environment variable is not set."
-        )
+        raise HTTPException(status_code=500, detail="S3_BUCKET environment variable is not set.")
     return bucket
 
 

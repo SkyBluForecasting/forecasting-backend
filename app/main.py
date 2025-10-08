@@ -9,9 +9,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .auth import validate_token
 from .constraint_service import get_active_constraints
+from .dashboard_service import get_dashboard_asset_data
 from .db_client import close_db_pool
 from .forecast_service import get_latest_forecast
-from .schemas import ActiveConstraintsResponse
+from .schemas import ActiveConstraintsResponse, DashboardResponse
 
 load_dotenv()
 
@@ -53,13 +54,9 @@ async def get_token(
     raw_auth_header = request.headers.get("Authorization")
     logger.info(f"Raw Authorization header: {repr(raw_auth_header)}")
 
-    token = (
-        credentials.credentials.strip()
-    )  # FastAPI's HTTPBearer already strips "Bearer "
+    token = credentials.credentials.strip()  # FastAPI's HTTPBearer already strips "Bearer "
 
-    logger.info(
-        f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}"
-    )
+    logger.info(f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}")
 
     return token
 
@@ -91,3 +88,18 @@ async def read_active_constraints(
     """Fetch active constraints for all assets or a specific asset."""
     validate_token(token)
     return await get_active_constraints(asset_uuid)
+
+
+@app.get(
+    "/dashboard/assets/{asset_uuid}/data/active",
+    response_model=DashboardResponse,
+    summary="Get active dashboard data for an asset",
+    description="Returns the active forecast (+ available measurements) for a specific asset.",
+)
+async def read_dashboard_asset_data(
+    asset_uuid: str,
+    token: str = Depends(get_token),
+):
+    """Fetch active forecast and measurement dashboard data for a specific asset."""
+    validate_token(token)
+    return await get_dashboard_asset_data(asset_uuid)

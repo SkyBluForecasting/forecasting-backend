@@ -41,9 +41,7 @@ class DummyKeySet:
 def test_missing_env_vars_raises_runtime_error(mocker):
     """Test that missing Auth0 env vars raise a RuntimeError on import."""
     # Patch environment to remove the required vars
-    mocker.patch.dict(
-        os.environ, {"AUTH0_DOMAIN": "", "AUTH0_AUDIENCE": ""}, clear=True
-    )
+    mocker.patch.dict(os.environ, {"AUTH0_DOMAIN": "", "AUTH0_AUDIENCE": ""}, clear=True)
 
     # Remove the module from sys.modules so it reloads from scratch
     if "app.auth" in sys.modules:
@@ -142,9 +140,7 @@ class TestGetJWKSKey:
         get_cached_jwks.cache_clear()
 
         # Patch the actual call inside the function
-        mocker.patch(
-            "app.auth.requests.get", side_effect=Exception("Simulated network error")
-        )
+        mocker.patch("app.auth.requests.get", side_effect=Exception("Simulated network error"))
 
         with pytest.raises(HTTPException) as exc_info:
             get_cached_jwks()
@@ -210,9 +206,7 @@ class TestValidateToken:
         mocker.patch("app.auth.get_key_id_from_token", return_value="abc123")
         mocker.patch(
             "app.auth.get_jwks_key",
-            side_effect=HTTPException(
-                status_code=401, detail="Unable to find matching JWKS key"
-            ),
+            side_effect=HTTPException(status_code=401, detail="Unable to find matching JWKS key"),
         )
         with pytest.raises(HTTPException) as exc:
             validate_token("bad-token")
@@ -254,9 +248,7 @@ class TestValidateToken:
 
     def test_unexpected_exception(self, mocker):
         """Should raise 401 for unexpected exceptions during validation."""
-        mocker.patch(
-            "app.auth.get_key_id_from_token", side_effect=Exception("Unexpected!")
-        )
+        mocker.patch("app.auth.get_key_id_from_token", side_effect=Exception("Unexpected!"))
         with pytest.raises(HTTPException) as exc:
             validate_token("some-token")
         assert exc.value.status_code == 401
@@ -268,9 +260,7 @@ class TestGetToken:
 
     def test_get_token_success(self):
         """Should return token string when Authorization header is valid."""
-        req = Request(
-            scope={"type": "http", "headers": [(b"authorization", b"Bearer abc123")]}
-        )
+        req = Request(scope={"type": "http", "headers": [(b"authorization", b"Bearer abc123")]})
         token = get_token(req)
         assert token == "abc123"
 
@@ -283,9 +273,7 @@ class TestGetToken:
 
     def test_get_token_invalid_header(self):
         """Should raise 403 when Authorization header is invalid."""
-        req = Request(
-            scope={"type": "http", "headers": [(b"authorization", b"Basic abc123")]}
-        )
+        req = Request(scope={"type": "http", "headers": [(b"authorization", b"Basic abc123")]})
         with pytest.raises(HTTPException) as exc:
             get_token(req)
         assert exc.value.status_code == 403

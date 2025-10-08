@@ -5,10 +5,52 @@ import io
 import logging
 
 from fastapi import HTTPException
+from forecasting_db.models import ForecastRuns, Forecasts
+from sqlalchemy import select
 
+from .db_client import AsyncSessionLocal
 from .s3_client import get_object, get_s3_bucket, get_s3_client, list_objects
 
 logger = logging.getLogger(__name__)
+
+
+async def get_active_forecast(asset_uuid: str):
+    """Return latest forecast_run row for an asset as dict."""
+    async with AsyncSessionLocal() as session:
+        q = (
+            select(
+                ForecastRuns.forecast_uuid,
+                ForecastRuns.run_uuid,
+                ForecastRuns.asset_uuid,
+                ForecastRuns.created_at,
+                ForecastRuns.start_time,
+                ForecastRuns.end_time,
+                ForecastRuns.frequency_min,
+            )
+            .where(ForecastRuns.asset_uuid == asset_uuid)
+            .order_by(ForecastRuns.created_at.desc())
+            .limit(1)
+        )
+        result = await session.execute(q)
+        row = result.mappings().first()
+        return row
+
+
+async def get_forecast_rows(forecast_uuid: str):
+    """Return all forecast values for a forecast_uuid."""
+    async with AsyncSessionLocal() as session:
+        q = (
+            select(Forecasts.timestamp, Forecasts.forecast_kw)
+            .where(Forecasts.forecast_uuid == forecast_uuid)
+            .order_by(Forecasts.timestamp)
+        )
+        result = await session.execute(q)
+        rows = result.mappings().all()
+        # Return datetime objects, not ISO strings
+        return [{"timestamp": r["timestamp"], "forecast_kw": r["forecast_kw"]} for r in rows]
+
+
+# TODO: Remove the following S3-related code after
 
 
 def parse_forecast_csv(content: str) -> list[dict]:

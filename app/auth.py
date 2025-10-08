@@ -120,9 +120,7 @@ def get_jwks_key(kid: str):
             return key_set.find_by_kid(kid)
         except ValueError:
             # Key still not found
-            raise HTTPException(
-                status_code=401, detail="Unable to find matching JWKS key"
-            )
+            raise HTTPException(status_code=401, detail="Unable to find matching JWKS key")
 
 
 def decode_and_validate_claims(token: str, key) -> dict:

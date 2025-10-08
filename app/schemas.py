@@ -1,7 +1,7 @@
 """Pydantic schemas for constraint-related data models."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -27,3 +27,11 @@ class ActiveConstraintsResponse(BaseModel):
     """Represent the response model containing active constraints per asset."""
 
     assets: List[AssetConstraints]
+
+
+class DashboardResponse(BaseModel):
+    """Represent active forecast and measurements for an asset."""
+
+    asset_uuid: str
+    forecast: Optional[Dict[str, Any]]
+    measurements: Optional[Dict[str, Any]]

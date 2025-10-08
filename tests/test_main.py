@@ -135,3 +135,93 @@ class TestReadActiveConstraints:
         )
 
         assert response.status_code == 500
+
+
+# -----------------------------
+# Dashboard endpoint tests
+# -----------------------------
+class TestReadDashboardAssetData:
+    """Test cases for the /dashboard/assets/{asset_uuid}/data/active endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_mock(self):
+        """Patch get_dashboard_asset_data for all tests in this class."""
+        with patch("app.main.get_dashboard_asset_data", new_callable=AsyncMock) as mock:
+            self.mock_dashboard_service = mock
+            yield
+
+    def test_no_forecast_returns_none(self, client):
+        """Return 200 with None forecast and measurements when no active forecast."""
+        asset_uuid = "asset123"
+        self.mock_dashboard_service.return_value = {
+            "asset_uuid": asset_uuid,
+            "forecast": None,
+            "measurements": None,
+        }
+
+        response = client.get(
+            f"/dashboard/assets/{asset_uuid}/data/active",
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["asset_uuid"] == asset_uuid
+        assert data["forecast"] is None
+        assert data["measurements"] is None
+
+    def test_returns_forecast_and_measurements(self, client):
+        """Return 200 with forecast values and measurements."""
+        asset_uuid = "asset123"
+        forecast_uuid = "11111111-1111-1111-1111-111111111111"
+        run_uuid = "run123"
+
+        forecast_values = [
+            {"timestamp": "2025-09-13T21:00:00Z", "forecast_kw": 50},
+            {"timestamp": "2025-09-13T22:00:00Z", "forecast_kw": 55},
+        ]
+
+        measurements = {
+            "metrics": ["metric1"],
+            "values": [
+                {"timestamp": "2025-09-13T21:00:00Z", "metric1": 100},
+                {"timestamp": "2025-09-13T22:00:00Z", "metric1": 110},
+            ],
+        }
+
+        self.mock_dashboard_service.return_value = {
+            "asset_uuid": asset_uuid,
+            "forecast": {
+                "forecast_uuid": forecast_uuid,
+                "run_uuid": run_uuid,
+                "values": forecast_values,
+            },
+            "measurements": measurements,
+        }
+
+        response = client.get(
+            f"/dashboard/assets/{asset_uuid}/data/active",
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["asset_uuid"] == asset_uuid
+        assert data["forecast"]["forecast_uuid"] == forecast_uuid
+        assert data["forecast"]["run_uuid"] == run_uuid
+        assert data["forecast"]["values"] == forecast_values
+        assert data["measurements"] == measurements
+
+    def test_invalid_asset_uuid_returns_404(self, client):
+        """Return 404 when dashboard data not found."""
+        asset_uuid = "invalid-asset"
+        self.mock_dashboard_service.side_effect = HTTPException(
+            status_code=404, detail="Dashboard data not found"
+        )
+
+        response = client.get(
+            f"/dashboard/assets/{asset_uuid}/data/active",
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 404

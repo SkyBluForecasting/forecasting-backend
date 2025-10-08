@@ -55,16 +55,13 @@ jobs:
           --extra-index-url https://pypi.org/simple
 
     - name: Check formatting with black
-      run: |
-        black . --check
+      run: black . --check  # pyproject.toml will supply line-length
 
     - name: Lint with Flake8 (Black-compatible)
-      run: |
-        flake8 . --count --ignore=D203,W503 --show-source --statistics --max-line-length=88
+      run: flake8 . --count --ignore=D203,W503 --show-source --statistics --max-line-length=100
 
     - name: Check imports with isort
-      run: |
-        isort . --check-only
+      run: isort . --check-only  # pyproject.toml will supply profile and line-length
 
     - name: Run tests with coverage (branch coverage)
       run: |
