@@ -87,4 +87,4 @@ jobs:
               -e DATABASE_URL=${SQLALCHEMY_URL} \
               -p 80:8000 \
               forecasting-api
-            EOF
+          EOF
