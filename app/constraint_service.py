@@ -1,7 +1,6 @@
 """Functions for pulling and parsing constraint data from DB."""
 
 import logging
-from datetime import timezone
 from typing import Optional
 
 from forecasting_db.models import Constraints, ForecastRuns
@@ -9,6 +8,7 @@ from sqlalchemy import Integer, cast, select, text
 from sqlalchemy.orm import aliased
 
 from .db_client import AsyncSessionLocal
+from .db_utils import to_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +27,9 @@ def format_constraints_rows(rows: list[dict]) -> dict:
     for r in rows:
         a_uuid = r["asset_uuid"]
 
-        start_time_utc = (
-            r["start_time"].astimezone(timezone.utc) if r["start_time"] else None
-        )
-        end_time_utc = r["end_time"].astimezone(timezone.utc) if r["end_time"] else None
-
         constraint = {
-            "start_time": start_time_utc,
-            "end_time": end_time_utc,
+            "start_time": to_utc_iso(r["start_time"]),
+            "end_time": to_utc_iso(r["end_time"]),
             "constraint_kw": r["constraint_kw"],
         }
 

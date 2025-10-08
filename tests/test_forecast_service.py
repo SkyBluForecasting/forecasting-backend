@@ -1,15 +1,125 @@
 """Unit tests for forecast_service.py."""
 
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
 
 from app.forecast_service import (
+    get_active_forecast,
+    get_forecast_rows,
     get_latest_forecast,
     load_latest_forecast_data_from_s3,
     parse_forecast_csv,
 )
+
+# tests/test_forecast_service.py
+
+
+# tests/test_forecast_service.py
+
+
+@pytest.mark.asyncio
+class TestGetActiveForecast:
+    """Tests for get_active_forecast function."""
+
+    async def test_returns_row(self):
+        """Returns latest forecast_run as dict."""
+        mock_row = {
+            "forecast_uuid": UUID("11111111-1111-1111-1111-111111111111"),
+            "run_uuid": "run123",
+            "asset_uuid": "asset123",
+            "created_at": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
+            "start_time": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
+            "end_time": datetime(2025, 10, 7, 13, 0, tzinfo=timezone.utc),
+            "frequency_min": 60,
+        }
+
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = mock_row
+
+        async_mock_session = AsyncMock()
+        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+        with patch(
+            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
+        ):
+            result = await get_active_forecast("asset123")
+
+        assert result["forecast_uuid"] == UUID("11111111-1111-1111-1111-111111111111")
+        assert result["run_uuid"] == "run123"
+        assert result["asset_uuid"] == "asset123"
+
+    async def test_returns_none_if_no_row(self):
+        """Returns None if no forecast_run exists."""
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = None
+
+        async_mock_session = AsyncMock()
+        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+        with patch(
+            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
+        ):
+            result = await get_active_forecast("asset123")
+
+        assert result is None
+
+
+@pytest.mark.asyncio
+class TestGetForecastRows:
+    """Tests for get_forecast_rows function."""
+
+    async def test_returns_rows(self):
+        """Returns list of dicts with timestamp and forecast_kw."""
+        mock_rows = [
+            {
+                "timestamp": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
+                "forecast_kw": 100.0,
+            },
+            {
+                "timestamp": datetime(2025, 10, 7, 13, 0, tzinfo=timezone.utc),
+                "forecast_kw": 105.5,
+            },
+        ]
+
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.all.return_value = mock_rows
+
+        async_mock_session = AsyncMock()
+        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+        with patch(
+            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
+        ):
+            result = await get_forecast_rows(
+                UUID("11111111-1111-1111-1111-111111111111")
+            )
+
+        assert len(result) == 2
+        assert result[0]["timestamp"].hour == 12
+        assert result[0]["forecast_kw"] == 100.0
+        assert result[1]["timestamp"].hour == 13
+        assert result[1]["forecast_kw"] == 105.5
+
+    async def test_returns_empty_list_if_no_rows(self):
+        """Returns empty list if no forecast rows exist."""
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.all.return_value = []
+
+        async_mock_session = AsyncMock()
+        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+        with patch(
+            "app.forecast_service.AsyncSessionLocal", return_value=async_mock_session
+        ):
+            result = await get_forecast_rows(
+                UUID("11111111-1111-1111-1111-111111111111")
+            )
+
+        assert result == []
 
 
 class TestParseForecastCSV:
