@@ -17,6 +17,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          ref: ${{ github.event.inputs.tag }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -59,31 +60,27 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} "echo success"
 
-      - name: Copy .env and wheels to EC2
+      - name: Copy source code and wheels to EC2
         run: |
-          scp -o StrictHostKeyChecking=no .env ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/.env
-          scp -o StrictHostKeyChecking=no -r wheels ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/wheels
+          scp -o StrictHostKeyChecking=no -r . ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/
+          scp -o StrictHostKeyChecking=no -r wheels/* ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/wheels/
 
-      - name: Copy Dockerfile to EC2
+      - name: Build Docker image and restart container
         run: |
-          scp -o StrictHostKeyChecking=no Dockerfile ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/Dockerfile
-
-      - name: SSH into EC2, build Docker image, and restart container
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << 'EOF'
-            set -e
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
             cd ~/forecasting-backend
+            set -e
 
-            echo "--- STOPPING old Docker container ---"
+            echo "--- STOPPING OLD CONTAINER ---"
             docker stop forecasting-api || true
             docker rm forecasting-api || true
             docker rmi forecasting-api || true
 
-            echo "--- BUILDING Docker image ---"
+            echo "--- BUILDING DOCKER IMAGE ---"
             docker build --no-cache -t forecasting-api . \
               --build-arg CODEARTIFACT_AUTH_TOKEN=${CODEARTIFACT_AUTH_TOKEN}
 
-            echo "--- RUNNING container ---"
+            echo "--- RUNNING NEW CONTAINER ---"
             docker run -d \
               --name forecasting-api \
               --env-file .env \
