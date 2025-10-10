@@ -225,3 +225,72 @@ class TestReadDashboardAssetData:
         )
 
         assert response.status_code == 404
+
+
+# -----------------------------
+# Measurements POST endpoint tests
+# -----------------------------
+class TestPostMeasurements:
+    """Test cases for the /assets/{asset_uuid}/measurements POST endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_mock(self):
+        """Patch insert_measurements for all tests in this class."""
+        with patch("app.main.insert_measurements", new_callable=AsyncMock) as mock:
+            self.mock_insert_service = mock
+            yield
+
+    def test_successful_insert(self, client):
+        """Return 200 when measurements are successfully inserted."""
+        self.mock_insert_service.return_value = {"status": "success", "inserted": 2}
+
+        payload = {
+            "measurements": [
+                {"timestamp": "2025-09-13T21:00:00Z", "metric": "load_kw", "value": 100},
+                {"timestamp": "2025-09-13T22:00:00Z", "metric": "load_kw", "value": 110},
+            ]
+        }
+
+        response = client.post(
+            "/assets/asset123/measurements",
+            json=payload,
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "success", "inserted": 2}
+
+    def test_empty_measurements_returns_no_data(self, client):
+        """Return 200 with no data message if measurements list is empty."""
+        self.mock_insert_service.return_value = {"status": "no data provided"}
+
+        payload = {"measurements": []}
+
+        response = client.post(
+            "/assets/asset123/measurements",
+            json=payload,
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "no data provided"}
+
+    def test_database_error_returns_500(self, client):
+        """Return 500 when database insert fails."""
+        self.mock_insert_service.side_effect = HTTPException(
+            status_code=500, detail="Database error"
+        )
+
+        payload = {
+            "measurements": [
+                {"timestamp": "2025-09-13T21:00:00Z", "metric": "load_kw", "value": 100}
+            ]
+        }
+
+        response = client.post(
+            "/assets/asset123/measurements",
+            json=payload,
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 500
