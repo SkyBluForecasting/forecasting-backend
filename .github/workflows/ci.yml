@@ -65,7 +65,11 @@ jobs:
 
     - name: Run tests with coverage (branch coverage)
       run: |
-        PYTHONPATH=${{ github.workspace }} coverage run --source=app -m pytest -p pytest_asyncio tests/
+        # Ensure pytest-asyncio is installed
+        pip install pytest-asyncio
+
+        # Run tests with coverage and asyncio support
+        PYTHONPATH=${{ github.workspace }} coverage run --source=app -m pytest --asyncio-mode=auto tests/
         coverage report -m
         coverage xml
 
