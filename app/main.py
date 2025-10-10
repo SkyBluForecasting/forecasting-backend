@@ -12,7 +12,8 @@ from .constraint_service import get_active_constraints
 from .dashboard_service import get_dashboard_asset_data
 from .db_client import close_db_pool
 from .forecast_service import get_latest_forecast
-from .schemas import ActiveConstraintsResponse, DashboardResponse
+from .measurement_service import insert_measurements
+from .schemas import ActiveConstraintsResponse, DashboardResponse, MeasurementsBatch
 
 load_dotenv()
 
@@ -103,3 +104,18 @@ async def read_dashboard_asset_data(
     """Fetch active forecast and measurement dashboard data for a specific asset."""
     validate_token(token)
     return await get_dashboard_asset_data(asset_uuid)
+
+
+@app.post(
+    "/assets/{asset_uuid}/measurements/",
+    summary="Insert measurements for an asset",
+    description="Insert one or more measurement points for the given asset.",
+)
+async def post_measurements(
+    asset_uuid: str,
+    data: MeasurementsBatch,
+    token: str = Depends(get_token),
+):
+    """Insert new measurements for an asset."""
+    validate_token(token)
+    return await insert_measurements(asset_uuid, [m.dict() for m in data.measurements])

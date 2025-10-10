@@ -3,7 +3,7 @@
 from collections import defaultdict
 
 from forecasting_db.models import Measurements
-from sqlalchemy import select
+from sqlalchemy import insert, select
 
 from .db_client import AsyncSessionLocal
 from .db_utils import to_utc, to_utc_iso
@@ -43,3 +43,27 @@ async def get_all_measurements(asset_uuid: str, start_time, end_time):
     values = [{"timestamp": ts, **metrics} for ts, metrics in sorted(grouped.items())]
 
     return {"metrics": sorted(metrics_set), "values": values}
+
+
+async def insert_measurements(asset_uuid: str, measurements: list[dict]):
+    """Insert a batch of measurement rows into the DB."""
+    if not measurements:
+        return {"status": "no data provided"}
+
+    async with AsyncSessionLocal() as session:
+        rows = []
+        for m in measurements:
+            rows.append(
+                {
+                    "asset_uuid": asset_uuid,
+                    "timestamp": to_utc(m["timestamp"]),
+                    "metric": m["metric"],
+                    "value": m["value"],
+                }
+            )
+
+        stmt = insert(Measurements).values(rows)
+        await session.execute(stmt)
+        await session.commit()
+
+    return {"status": "success", "inserted": len(rows)}
