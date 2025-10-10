@@ -65,7 +65,7 @@ jobs:
 
     - name: Run tests with coverage (branch coverage)
       run: |
-        PYTHONPATH=${{ github.workspace }} coverage run -m pytest -p pytest_asyncio --source=app tests/
+        PYTHONPATH=${{ github.workspace }} coverage run --source=app -m pytest -p pytest_asyncio tests/
         coverage report -m
         coverage xml
 
