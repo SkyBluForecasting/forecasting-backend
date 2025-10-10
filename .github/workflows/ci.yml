@@ -63,6 +63,10 @@ jobs:
     - name: Check imports with isort
       run: isort . --check-only  # pyproject.toml will supply profile and line-length
 
+    - name: Verify pytest-asyncio
+      run: |
+        pip list | grep pytest-asyncio
+
     - name: Run tests with coverage (branch coverage)
       run: |
         pip install coverage pytest
