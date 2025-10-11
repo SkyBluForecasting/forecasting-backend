@@ -15,7 +15,7 @@ async def test_get_active_constraints_formatting():
     mock_rows = [
         {
             "asset_uuid": "asset123",
-            "forecast_uuid": UUID("11111111-1111-1111-1111-111111111111"),
+            "forecast_run_id": UUID("11111111-1111-1111-1111-111111111111"),
             "start_time": datetime(2025, 9, 13, 21, 0, tzinfo=timezone.utc),
             "end_time": datetime(2025, 9, 13, 22, 0, tzinfo=timezone.utc),
             "constraint_kw": 38.081,
@@ -23,7 +23,7 @@ async def test_get_active_constraints_formatting():
         },
         {
             "asset_uuid": "asset123",
-            "forecast_uuid": UUID("11111111-1111-1111-1111-111111111111"),
+            "forecast_run_id": UUID("11111111-1111-1111-1111-111111111111"),
             "start_time": datetime(2025, 9, 13, 22, 0, tzinfo=timezone.utc),
             "end_time": datetime(2025, 9, 13, 23, 0, tzinfo=timezone.utc),
             "constraint_kw": 819.49,
@@ -38,7 +38,7 @@ async def test_get_active_constraints_formatting():
 
     asset = response["assets"][0]
     assert asset["asset_uuid"] == "asset123"
-    assert asset["forecast_uuid"] == "11111111-1111-1111-1111-111111111111"
+    assert asset["forecast_run_id"] == "11111111-1111-1111-1111-111111111111"
     assert asset["frequency_min"] == 60
     assert len(asset["constraints"]) == 2
 
@@ -54,7 +54,7 @@ async def test_get_active_constraints_calls_db():
     mock_rows = [
         {
             "asset_uuid": "asset123",
-            "forecast_uuid": UUID("11111111-1111-1111-1111-111111111111"),
+            "forecast_run_id": UUID("11111111-1111-1111-1111-111111111111"),
             "start_time": datetime(2025, 9, 13, 21, 0, tzinfo=timezone.utc),
             "end_time": datetime(2025, 9, 13, 22, 0, tzinfo=timezone.utc),
             "constraint_kw": 38.081,
@@ -74,7 +74,7 @@ async def test_get_active_constraints_calls_db():
     assert "assets" in result
     asset = result["assets"][0]
     assert asset["asset_uuid"] == "asset123"
-    assert asset["forecast_uuid"] == "11111111-1111-1111-1111-111111111111"
+    assert asset["forecast_run_id"] == "11111111-1111-1111-1111-111111111111"
     assert len(asset["constraints"]) == 1
     constraint = asset["constraints"][0]
     assert constraint["start_time"] == "2025-09-13T21:00:00Z"
@@ -88,7 +88,7 @@ async def test_constraints_with_null_times():
     mock_rows = [
         {
             "asset_uuid": "asset123",
-            "forecast_uuid": UUID("11111111-1111-1111-1111-111111111111"),
+            "forecast_run_id": UUID("11111111-1111-1111-1111-111111111111"),
             "start_time": None,
             "end_time": None,
             "constraint_kw": 42.0,
@@ -109,7 +109,7 @@ async def test_constraints_multiple_assets():
     mock_rows = [
         {
             "asset_uuid": "assetA",
-            "forecast_uuid": UUID("11111111-1111-1111-1111-111111111111"),
+            "forecast_run_id": UUID("11111111-1111-1111-1111-111111111111"),
             "start_time": datetime(2025, 9, 13, 21, 0, tzinfo=timezone.utc),
             "end_time": datetime(2025, 9, 13, 22, 0, tzinfo=timezone.utc),
             "constraint_kw": 50.0,
@@ -117,7 +117,7 @@ async def test_constraints_multiple_assets():
         },
         {
             "asset_uuid": "assetB",
-            "forecast_uuid": UUID("22222222-2222-2222-2222-222222222222"),
+            "forecast_run_id": UUID("22222222-2222-2222-2222-222222222222"),
             "start_time": datetime(2025, 9, 13, 21, 0, tzinfo=timezone.utc),
             "end_time": datetime(2025, 9, 13, 22, 0, tzinfo=timezone.utc),
             "constraint_kw": 75.0,

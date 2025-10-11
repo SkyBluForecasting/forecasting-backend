@@ -1,15 +1,17 @@
 """Functions for pulling and parsing measurements."""
 
 from collections import defaultdict
+from datetime import datetime
+from typing import Dict, List
 
-from forecasting_db.models import Measurements
+from forecasting_db.models import Measurement  # updated model name
 from sqlalchemy import insert, select
 
 from .db_client import AsyncSessionLocal
 from .db_utils import to_utc, to_utc_iso
 
 
-async def get_all_measurements(asset_uuid: str, start_time, end_time):
+async def get_all_measurements(asset_uuid: str, start_time: datetime, end_time: datetime) -> Dict:
     """Return all measurements grouped by timestamp with all metrics."""
     async with AsyncSessionLocal() as session:
 
@@ -17,13 +19,13 @@ async def get_all_measurements(asset_uuid: str, start_time, end_time):
         end_time_utc = to_utc(end_time)
 
         q = (
-            select(Measurements.timestamp, Measurements.metric, Measurements.value)
+            select(Measurement.timestamp, Measurement.metric, Measurement.value)
             .where(
-                (Measurements.asset_uuid == asset_uuid)
-                & (Measurements.timestamp >= start_time_utc)
-                & (Measurements.timestamp <= end_time_utc)
+                (Measurement.asset_uuid == asset_uuid)
+                & (Measurement.timestamp >= start_time_utc)
+                & (Measurement.timestamp <= end_time_utc)
             )
-            .order_by(Measurements.timestamp)
+            .order_by(Measurement.timestamp)
         )
         result = await session.execute(q)
         rows = result.mappings().all()
@@ -45,24 +47,23 @@ async def get_all_measurements(asset_uuid: str, start_time, end_time):
     return {"metrics": sorted(metrics_set), "values": values}
 
 
-async def insert_measurements(asset_uuid: str, measurements: list[dict]):
+async def insert_measurements(asset_uuid: str, measurements: List[Dict]) -> Dict:
     """Insert a batch of measurement rows into the DB."""
     if not measurements:
         return {"status": "no data provided"}
 
     async with AsyncSessionLocal() as session:
-        rows = []
-        for m in measurements:
-            rows.append(
-                {
-                    "asset_uuid": asset_uuid,
-                    "timestamp": to_utc(m["timestamp"]),
-                    "metric": m["metric"],
-                    "value": m["value"],
-                }
-            )
+        rows = [
+            {
+                "asset_uuid": asset_uuid,
+                "timestamp": to_utc(m["timestamp"]),
+                "metric": m["metric"],
+                "value": m["value"],
+            }
+            for m in measurements
+        ]
 
-        stmt = insert(Measurements).values(rows)
+        stmt = insert(Measurement).values(rows)
         await session.execute(stmt)
         await session.commit()
 

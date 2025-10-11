@@ -83,36 +83,6 @@ docker build -t forecasting-api .
 docker run -p 8000:8000 --env-file .env forecasting-api
 ```
 
-### Option 3: Use ngrok to expose your local server to the internet (handy for testing Auth0 callbacks or external integrations):
-
-To expose your local API endpoints to the internet for testing:
-
-1. Install ngrok:
-```bash
-# macOS (using Homebrew)
-brew install ngrok
-
-# Or download from https://ngrok.com/download
-```
-
-2. Run the development server
-```bash
-uvicorn app.main:app --reload
-```
-
-3. In a new terminal, start ngrok:
-```bash
-ngrok http 8000
-```
-
-4. ngrok will provide a public URL (e.g., `https://abc123.ngrok.io`) that forwards to your local server
-
-5. Update your Auth0 configuration:
-   - Add the ngrok URL to your Auth0 application's allowed callback URLs
-   - Update the `AUTH0_CALLBACK_URL` in your `.env` file to use the ngrok URL
-
-Note: The ngrok URL changes each time you restart ngrok  without a paid account.
-
 ## Authentication Setup & Testing
 
 To test API endpoints locally, you need a valid JWT token from Auth0:

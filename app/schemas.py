@@ -18,7 +18,7 @@ class AssetConstraints(BaseModel):
     """Represent constraints associated with a specific asset and forecast."""
 
     asset_uuid: str = Field(..., example="M4C")
-    forecast_uuid: str = Field(..., example="11111111-1111-1111-1111-111111111111")
+    forecast_run_id: str = Field(..., example="11111111-1111-1111-1111-111111111111")  # updated
     frequency_min: int = Field(..., example=60)
     constraints: List[Constraint]
 

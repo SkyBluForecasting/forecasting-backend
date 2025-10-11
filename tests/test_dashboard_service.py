@@ -1,4 +1,4 @@
-"""Unit tests for the constraint service module, including formatting and DB calls."""
+"""Unit tests for the dashboard service module, including forecast and measurement fetching."""
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
@@ -27,8 +27,8 @@ async def test_dashboard_no_forecast():
 async def test_dashboard_forecast_no_rows():
     """If forecast exists but no forecast rows, measurements should be empty."""
     latest_forecast = {
-        "forecast_uuid": "11111111-1111-1111-1111-111111111111",
-        "run_uuid": "run123",
+        "forecast_run_id": "run111",
+        "model_run_id": "model123",
         "asset_uuid": "asset123",
     }
 
@@ -47,7 +47,8 @@ async def test_dashboard_forecast_no_rows():
         result = await get_dashboard_asset_data("asset123")
 
     assert result["asset_uuid"] == "asset123"
-    assert result["forecast"]["forecast_uuid"] == latest_forecast["forecast_uuid"]
+    assert result["forecast"]["forecast_run_id"] == latest_forecast["forecast_run_id"]
+    assert result["forecast"]["model_run_id"] == latest_forecast["model_run_id"]
     assert result["forecast"]["values"] == []
     assert result["measurements"]["metrics"] == []
     assert result["measurements"]["values"] == []
@@ -57,8 +58,8 @@ async def test_dashboard_forecast_no_rows():
 async def test_dashboard_forecast_with_rows_and_measurements():
     """Full flow: forecast rows exist and measurements are returned."""
     latest_forecast = {
-        "forecast_uuid": "11111111-1111-1111-1111-111111111111",
-        "run_uuid": "run123",
+        "forecast_run_id": "run111",
+        "model_run_id": "model123",
         "asset_uuid": "asset123",
     }
 
@@ -96,8 +97,8 @@ async def test_dashboard_forecast_with_rows_and_measurements():
         result = await get_dashboard_asset_data("asset123")
 
     assert result["asset_uuid"] == "asset123"
-    assert result["forecast"]["forecast_uuid"] == latest_forecast["forecast_uuid"]
-    assert result["forecast"]["run_uuid"] == latest_forecast["run_uuid"]
+    assert result["forecast"]["forecast_run_id"] == latest_forecast["forecast_run_id"]
+    assert result["forecast"]["model_run_id"] == latest_forecast["model_run_id"]
     # Check that timestamps are converted to ISO
     expected_forecast = [
         {"timestamp": to_utc_iso(forecast_rows[0]["timestamp"]), "forecast_kw": 50},

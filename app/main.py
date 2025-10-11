@@ -29,7 +29,7 @@ app = FastAPI(
 @app.on_event("shutdown")
 async def shutdown_event():
     """Close database connections on app shutdown."""
-    await close_db_pool()
+    await close_db_pool()  # Uses db_client’s pool cleanup
 
 
 security = HTTPBearer()
