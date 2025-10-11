@@ -32,10 +32,10 @@ async def get_dashboard_asset_data(asset_uuid: str):
             "measurements": None,
         }
 
-    forecast_uuid = latest_forecast["forecast_uuid"]
+    forecast_run_id = latest_forecast["forecast_run_id"]
 
-    # 2. Fetch forecast values first
-    forecast_values = await get_forecast_rows(forecast_uuid)
+    # 2. Fetch forecast values
+    forecast_values = await get_forecast_rows(forecast_run_id)
     start_time = forecast_values[0]["timestamp"] if forecast_values else None
     end_time = forecast_values[-1]["timestamp"] if forecast_values else None
 
@@ -55,8 +55,8 @@ async def get_dashboard_asset_data(asset_uuid: str):
     return {
         "asset_uuid": asset_uuid,
         "forecast": {
-            "forecast_uuid": forecast_uuid,
-            "run_uuid": latest_forecast["run_uuid"],
+            "forecast_run_id": forecast_run_id,
+            "model_run_id": latest_forecast.get("model_run_id"),
             "values": forecast_values_iso,
         },
         "measurements": measurements_values,

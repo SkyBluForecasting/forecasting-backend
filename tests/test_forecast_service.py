@@ -2,7 +2,6 @@
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -15,11 +14,6 @@ from app.forecast_service import (
     parse_forecast_csv,
 )
 
-# tests/test_forecast_service.py
-
-
-# tests/test_forecast_service.py
-
 
 @pytest.mark.asyncio
 class TestGetActiveForecast:
@@ -28,8 +22,8 @@ class TestGetActiveForecast:
     async def test_returns_row(self):
         """Returns latest forecast_run as dict."""
         mock_row = {
-            "forecast_uuid": UUID("11111111-1111-1111-1111-111111111111"),
-            "run_uuid": "run123",
+            "forecast_run_id": "run111",
+            "model_run_id": "model123",
             "asset_uuid": "asset123",
             "created_at": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
             "start_time": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -46,8 +40,8 @@ class TestGetActiveForecast:
         with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
             result = await get_active_forecast("asset123")
 
-        assert result["forecast_uuid"] == UUID("11111111-1111-1111-1111-111111111111")
-        assert result["run_uuid"] == "run123"
+        assert result["forecast_run_id"] == "run111"
+        assert result["model_run_id"] == "model123"
         assert result["asset_uuid"] == "asset123"
 
     async def test_returns_none_if_no_row(self):
@@ -73,11 +67,11 @@ class TestGetForecastRows:
         mock_rows = [
             {
                 "timestamp": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
-                "forecast_kw": 100.0,
+                "forecast_value": 100.0,
             },
             {
                 "timestamp": datetime(2025, 10, 7, 13, 0, tzinfo=timezone.utc),
-                "forecast_kw": 105.5,
+                "forecast_value": 105.5,
             },
         ]
 
@@ -88,7 +82,7 @@ class TestGetForecastRows:
         async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
         with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            result = await get_forecast_rows(UUID("11111111-1111-1111-1111-111111111111"))
+            result = await get_forecast_rows("run111")
 
         assert len(result) == 2
         assert result[0]["timestamp"].hour == 12
@@ -105,7 +99,7 @@ class TestGetForecastRows:
         async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
         with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            result = await get_forecast_rows(UUID("11111111-1111-1111-1111-111111111111"))
+            result = await get_forecast_rows("run111")
 
         assert result == []
 

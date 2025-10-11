@@ -90,7 +90,8 @@ class TestReadActiveConstraints:
             "assets": [
                 {
                     "asset_uuid": "asset123",
-                    "forecast_uuid": "uuid123",
+                    "forecast_uuid": "11111111-1111-1111-1111-111111111111",
+                    "forecast_run_id": "run123",  # <-- added
                     "frequency_min": 60,
                     "constraints": [
                         {
@@ -193,7 +194,7 @@ class TestReadDashboardAssetData:
             "asset_uuid": asset_uuid,
             "forecast": {
                 "forecast_uuid": forecast_uuid,
-                "run_uuid": run_uuid,
+                "forecast_run_id": run_uuid,  # <-- updated to match Pydantic schema
                 "values": forecast_values,
             },
             "measurements": measurements,
@@ -208,7 +209,7 @@ class TestReadDashboardAssetData:
         data = response.json()
         assert data["asset_uuid"] == asset_uuid
         assert data["forecast"]["forecast_uuid"] == forecast_uuid
-        assert data["forecast"]["run_uuid"] == run_uuid
+        assert data["forecast"]["forecast_run_id"] == run_uuid
         assert data["forecast"]["values"] == forecast_values
         assert data["measurements"] == measurements
 

@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from forecasting_db.models import Constraints, ForecastRuns
+from forecasting_db.models import Constraint, ForecastRun
 from sqlalchemy import Integer, cast, select, text
 from sqlalchemy.orm import aliased
 
@@ -36,7 +36,7 @@ def format_constraints_rows(rows: list[dict]) -> dict:
         if a_uuid not in assets_dict:
             assets_dict[a_uuid] = {
                 "asset_uuid": a_uuid,
-                "forecast_uuid": str(r["forecast_uuid"]),  # UUID -> string
+                "forecast_run_id": str(r["forecast_run_id"]),
                 "frequency_min": r["frequency_min"],
                 "constraints": [],
             }
@@ -57,40 +57,40 @@ async def get_active_constraints(asset_uuid: Optional[str] = None) -> dict:
         dict: Dictionary matching ActiveConstraintsResponse schema.
     """
     async with AsyncSessionLocal() as session:
-        # Latest forecast per asset
+        # Latest forecast run per asset
         latest_forecasts_subq = (
             select(
-                ForecastRuns.asset_uuid,
-                ForecastRuns.forecast_uuid,
-                ForecastRuns.frequency_min,
-                ForecastRuns.created_at,
+                ForecastRun.asset_uuid,
+                ForecastRun.forecast_run_id,
+                ForecastRun.frequency_min,
+                ForecastRun.created_at,
             )
-            .distinct(ForecastRuns.asset_uuid)
-            .order_by(ForecastRuns.asset_uuid, ForecastRuns.created_at.desc())
+            .distinct(ForecastRun.asset_uuid)
+            .order_by(ForecastRun.asset_uuid, ForecastRun.created_at.desc())
             .subquery()
         )
 
         lf = aliased(latest_forecasts_subq)
 
-        # End time expression
+        # Calculate end time of constraint
         end_time_expr = (
-            Constraints.timestamp + cast(lf.c.frequency_min, Integer) * text("interval '1 minute'")
+            Constraint.timestamp + cast(lf.c.frequency_min, Integer) * text("interval '1 minute'")
         ).label("end_time")
 
-        # Join constraints with latest forecasts
+        # Join constraints with latest forecast runs
         q = select(
-            Constraints.asset_uuid,
-            Constraints.forecast_uuid,
-            Constraints.timestamp.label("start_time"),
+            Constraint.asset_uuid,
+            Constraint.forecast_run_id,
+            Constraint.timestamp.label("start_time"),
             end_time_expr,
-            Constraints.constraint_kw,
+            Constraint.constraint_kw,
             lf.c.frequency_min,
-        ).join(lf, Constraints.forecast_uuid == lf.c.forecast_uuid)
+        ).join(lf, Constraint.forecast_run_id == lf.c.forecast_run_id)
 
         if asset_uuid:
             q = q.where(lf.c.asset_uuid == asset_uuid)
 
-        q = q.order_by(lf.c.asset_uuid, Constraints.timestamp)
+        q = q.order_by(lf.c.asset_uuid, Constraint.timestamp)
 
         result = await session.execute(q)
         rows = result.mappings().all()
