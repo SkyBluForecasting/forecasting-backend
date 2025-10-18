@@ -1,7 +1,7 @@
 """Pydantic schemas for constraint-related data models."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -40,18 +40,26 @@ class DashboardResponse(BaseModel):
 class MeasurementIn(BaseModel):
     """Single measurement input for an asset."""
 
-    metric: str = Field(..., example="load_kw")
-    timestamp: datetime = Field(..., example="2025-01-01T00:00:00Z")
-    value: float = Field(..., example=1034.55)
+    metric: Literal["load", "temp"]  # Only these two allowed
+    timestamp: datetime
+    value: float
 
 
 class MeasurementsBatch(BaseModel):
     """Batch of measurements to insert for an asset."""
 
-    measurements: List[MeasurementIn] = Field(
-        ...,
-        example=[
-            {"metric": "load_kw", "timestamp": "2025-01-01T00:00:00Z", "value": 1034.55},
-            {"metric": "temp_c", "timestamp": "2025-01-01T00:00:00Z", "value": -2.1},
-        ],
-    )
+    measurements: List[MeasurementIn]
+
+
+class MeasurementOut(BaseModel):
+    """Single measurement output for an asset."""
+
+    timestamp: datetime
+    values: Dict[str, float]  # metric_name -> value
+
+
+class MeasurementsResponse(BaseModel):
+    """Grouped measurements response."""
+
+    metrics: List[str]
+    values: List[MeasurementOut]

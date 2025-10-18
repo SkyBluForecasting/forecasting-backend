@@ -4,14 +4,13 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 
 from app.measurement_service import get_all_measurements, insert_measurements
 
 
 @pytest.mark.asyncio
 async def test_get_all_measurements_basic_formatting():
-    """Test measurements are grouped by timestamp and metrics sorted."""
+    """Test measurements are grouped by timestamp and metrics sorted (with 'values' dict)."""
     mock_rows = [
         {
             "timestamp": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -30,11 +29,8 @@ async def test_get_all_measurements_basic_formatting():
         },
     ]
 
-    # Mock the result object returned by session.execute
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = mock_rows
-
-    # Mock the async context manager for AsyncSessionLocal
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
@@ -49,10 +45,16 @@ async def test_get_all_measurements_basic_formatting():
     assert "values" in result
     assert result["metrics"] == ["power", "voltage"]
     assert len(result["values"]) == 2
+
     first_value = result["values"][0]
     assert first_value["timestamp"] == "2025-10-07T12:00:00Z"
-    assert first_value["power"] == 100.5
-    assert first_value["voltage"] == 220.0
+    assert first_value["values"]["power"] == 100.5
+    assert first_value["values"]["voltage"] == 220.0
+
+    second_value = result["values"][1]
+    assert second_value["timestamp"] == "2025-10-07T13:00:00Z"
+    assert second_value["values"]["power"] == 105.0
+    assert "voltage" not in second_value["values"]
 
 
 @pytest.mark.asyncio
@@ -76,7 +78,7 @@ async def test_get_all_measurements_empty():
 
 @pytest.mark.asyncio
 async def test_get_all_measurements_single_metric():
-    """Test measurements with only one metric."""
+    """Test measurements with only one metric (using 'values' dict)."""
     mock_rows = [
         {
             "timestamp": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -87,7 +89,6 @@ async def test_get_all_measurements_single_metric():
 
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = mock_rows
-
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
@@ -99,8 +100,8 @@ async def test_get_all_measurements_single_metric():
         )
 
     assert result["metrics"] == ["power"]
-    assert result["values"][0]["power"] == 100.0
     assert result["values"][0]["timestamp"] == "2025-10-07T12:00:00Z"
+    assert result["values"][0]["values"]["power"] == 100.0
 
 
 @pytest.mark.asyncio
@@ -139,19 +140,34 @@ async def test_insert_measurements_no_data():
     assert result == {"status": "no data provided"}
 
 
-async def test_insert_measurements_conflict_mocked():
-    """Test that inserting duplicate measurements raises IntegrityError."""
-    ts = datetime(2025, 10, 9, 12, 0, tzinfo=timezone.utc)
-    duplicate_measurements = [{"timestamp": ts, "metric": "power", "value": 200.0}]
+@pytest.mark.asyncio
+async def test_insert_measurements_upsert():
+    """Test that duplicate measurements update existing rows instead of failing."""
+    ts = datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc)
+    initial_rows = [
+        {"timestamp": ts, "metric": "power", "value": 100.0},
+        {"timestamp": ts, "metric": "voltage", "value": 220.0},
+    ]
+    updated_rows = [
+        {"timestamp": ts, "metric": "power", "value": 101.0},  # updated value
+        {"timestamp": ts, "metric": "voltage", "value": 221.0},  # updated value
+    ]
 
-    # Mock the async session to raise IntegrityError when execute is called
     async_mock_session = AsyncMock()
-    async_mock_session.__aenter__.return_value.execute.side_effect = IntegrityError(
-        "duplicate key value violates unique constraint",
-        params=None,
-        orig=None,
-    )
+    mock_context = async_mock_session.__aenter__.return_value
+    mock_context.execute = AsyncMock()
+    mock_context.commit = AsyncMock()
 
     with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session):
-        with pytest.raises(IntegrityError):
-            await insert_measurements("asset123", duplicate_measurements)
+        # first insert
+        result1 = await insert_measurements("asset123", initial_rows)
+        # second insert with updated values
+        result2 = await insert_measurements("asset123", updated_rows)
+
+    assert result1["status"] == "success"
+    assert result2["status"] == "success"
+    assert result1["inserted"] == 2
+    assert result2["inserted"] == 2
+    # execute and commit called twice in total
+    assert mock_context.execute.call_count == 2
+    assert mock_context.commit.call_count == 2
