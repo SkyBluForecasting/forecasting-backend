@@ -247,8 +247,8 @@ class TestPostMeasurements:
 
         payload = {
             "measurements": [
-                {"timestamp": "2025-09-13T21:00:00Z", "metric": "load_kw", "value": 100},
-                {"timestamp": "2025-09-13T22:00:00Z", "metric": "load_kw", "value": 110},
+                {"timestamp": "2025-09-13T21:00:00Z", "metric": "load", "value": 100},
+                {"timestamp": "2025-09-13T22:00:00Z", "metric": "temp", "value": 110},
             ]
         }
 
@@ -283,9 +283,7 @@ class TestPostMeasurements:
         )
 
         payload = {
-            "measurements": [
-                {"timestamp": "2025-09-13T21:00:00Z", "metric": "load_kw", "value": 100}
-            ]
+            "measurements": [{"timestamp": "2025-09-13T21:00:00Z", "metric": "load", "value": 100}]
         }
 
         response = client.post(
@@ -295,3 +293,51 @@ class TestPostMeasurements:
         )
 
         assert response.status_code == 500
+
+
+# -----------------------------
+# Measurements GET endpoint tests
+# -----------------------------
+class TestGetMeasurements:
+    """Test cases for the /assets/{asset_uuid}/measurements GET endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_mock(self):
+        """Patch get_all_measurements for all tests in this class."""
+        with patch("app.main.get_all_measurements", new_callable=AsyncMock) as mock:
+            self.mock_get_measurements = mock
+            yield
+
+    def test_successful_get_measurements(self, client):
+        """Return 200 and measurement data for valid params."""
+        self.mock_get_measurements.return_value = {
+            "metrics": ["load"],
+            "values": [
+                {"timestamp": "2025-09-13T21:00:00Z", "values": {"load": 100}},
+                {"timestamp": "2025-09-13T22:00:00Z", "values": {"load": 110}},
+            ],
+        }
+
+        response = client.get(
+            "/assets/asset123/measurements/",
+            params={
+                "start_time": "2025-09-13T21:00:00",
+                "end_time": "2025-09-13T22:00:00",
+            },
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metrics"] == ["load"]
+        assert len(data["values"]) == 2
+
+    def test_invalid_datetime_returns_400(self, client):
+        """Return 400 if datetime format is invalid."""
+        response = client.get(
+            "/assets/asset123/measurements/?start_time=not-a-date&end_time=2025-09-13T22:00:00",
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 400
+        assert "Invalid datetime format" in response.text
