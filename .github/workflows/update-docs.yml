@@ -18,19 +18,15 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install fastapi uvicorn python-dotenv
+          pip install fastapi python-dotenv redoc-cli
 
-      - name: Generate OpenAPI schema
-        run: |
-          uvicorn app.main:app --port 8000 &
-          sleep 5
-          curl http://127.0.0.1:8000/openapi.json -o docs/openapi.json
-          pkill uvicorn
+      - name: Generate OpenAPI schema and static ReDoc
+        run: python scripts/generate_docs.py
 
       - name: Commit and push docs
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add docs/openapi.json
+          git add docs/openapi.json docs/index.html
           git commit -m "Update API docs [auto]" || echo "No changes"
           git push
