@@ -341,3 +341,80 @@ class TestGetMeasurements:
 
         assert response.status_code == 400
         assert "Invalid datetime format" in response.text
+
+
+# -----------------------------
+# Assets POST endpoint tests
+# -----------------------------
+class TestPostAssets:
+    """Test cases for the /assets POST endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_mock(self):
+        """Patch upsert_assets for all tests in this class."""
+        with patch("app.main.upsert_assets", new_callable=AsyncMock) as mock:
+            self.mock_upsert_assets = mock
+            yield
+
+    def test_successful_post_assets(self, client):
+        """Return 200 and summary of inserted/updated assets."""
+        self.mock_upsert_assets.return_value = {
+            "inserted": 3,
+            "updated": 0,
+            "total": 3,
+        }
+
+        request_body = {
+            "assets": [
+                {
+                    "id": "K0A",
+                    "name": "K0A",
+                    "type": "substation",
+                    "capacity_kw": 80000.0,
+                    "assets": [],
+                },
+                {
+                    "id": "K0B",
+                    "name": "K0B",
+                    "type": "substation",
+                    "capacity_kw": 70000.0,
+                    "assets": [],
+                },
+            ]
+        }
+
+        response = client.post(
+            "/assets",
+            json=request_body,
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {"inserted": 3, "updated": 0, "total": 3}
+
+        # Check that service was called once with the correct parsed payload
+        args, _ = self.mock_upsert_assets.call_args
+        assert len(args[0]) == 2  # Two assets passed in
+
+    def test_invalid_payload_returns_422(self, client):
+        """Return 422 if required fields missing or invalid."""
+        # Missing 'id' field
+        invalid_body = {"assets": [{"name": "BadAsset", "type": "substation"}]}
+
+        response = client.post(
+            "/assets",
+            json=invalid_body,
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 422  # Pydantic validation error
+
+    def test_unauthorized_returns_403(self, client):
+        """Return 403 if no Authorization header is provided."""
+        request_body = {
+            "assets": [{"id": "K0A", "name": "K0A", "type": "substation", "assets": []}]
+        }
+
+        response = client.post("/assets", json=request_body)
+        assert response.status_code == 403

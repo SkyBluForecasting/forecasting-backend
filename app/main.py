@@ -8,13 +8,20 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from .asset_service import upsert_assets
 from .auth import validate_token
 from .constraint_service import get_active_constraints
 from .dashboard_service import get_dashboard_asset_data
 from .db_client import close_db_pool
 from .forecast_service import get_latest_forecast
 from .measurement_service import get_all_measurements, insert_measurements
-from .schemas import ActiveConstraintsResponse, DashboardResponse, MeasurementsBatch
+from .schemas import (
+    ActiveConstraintsResponse,
+    AssetUpsertRequest,
+    AssetUpsertResponse,
+    DashboardResponse,
+    MeasurementsBatch,
+)
 
 load_dotenv()
 
@@ -144,3 +151,18 @@ async def get_measurements(
 
     measurements = await get_all_measurements(asset_uuid, start_dt, end_dt)
     return measurements
+
+
+@app.post(
+    "/assets",
+    response_model=AssetUpsertResponse,
+    summary="Add or update assets",
+    description="Creates new assets or updates existing ones. Does not delete any records.",
+)
+async def post_assets(
+    req: AssetUpsertRequest,
+    token: str = Depends(get_token),
+):
+    """Add or update multiple assets without deleting existing ones."""
+    validate_token(token)
+    return await upsert_assets(req.assets)

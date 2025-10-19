@@ -63,3 +63,27 @@ class MeasurementsResponse(BaseModel):
 
     metrics: List[str]
     values: List[MeasurementOut]
+
+
+class AssetIn(BaseModel):
+    """Schema for an asset received via API."""
+
+    id: str = Field(..., example="K0A")
+    name: str = Field(..., example="K0A")
+    type: str = Field(..., example="substation")
+    capacity_kw: Optional[float] = Field(None, example=80000.0)
+    assets: List["AssetIn"] = []  # for nested children, optional
+
+
+class AssetUpsertRequest(BaseModel):
+    """Request schema for bulk inserting/updating assets."""
+
+    assets: List[AssetIn]
+
+
+class AssetUpsertResponse(BaseModel):
+    """Response summarizing a bulk asset sync."""
+
+    inserted: int
+    updated: int
+    total: int
