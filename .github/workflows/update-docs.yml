@@ -1,0 +1,36 @@
+name: Update Static API Docs
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install fastapi uvicorn python-dotenv
+
+      - name: Generate OpenAPI schema
+        run: |
+          uvicorn app.main:app --port 8000 &
+          sleep 5
+          curl http://127.0.0.1:8000/openapi.json -o docs/openapi.json
+          pkill uvicorn
+
+      - name: Commit and push docs
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add docs/openapi.json
+          git commit -m "Update API docs [auto]" || echo "No changes"
+          git push
