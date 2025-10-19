@@ -16,11 +16,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          pip install fastapi python-dotenv redoc-cli
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
 
-      - name: Generate OpenAPI schema and static ReDoc
+      - name: Install python + node dependencies
+        run: |
+          pip install fastapi python-dotenv
+          npm install -g redoc-cli
+
+      - name: Generate OpenAPI schema + ReDoc HTML
         run: python scripts/generate_docs.py
 
       - name: Commit and push docs
