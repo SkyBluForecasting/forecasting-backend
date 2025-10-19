@@ -27,6 +27,8 @@ jobs:
           npm install -g redoc-cli
 
       - name: Generate OpenAPI schema + ReDoc HTML
+        env:
+            PYTHONPATH: ${{ github.workspace }}
         run: python .github/scripts/generate_docs.py
 
       - name: Commit and push docs
