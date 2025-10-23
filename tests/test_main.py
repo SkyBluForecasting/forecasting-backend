@@ -338,7 +338,7 @@ class TestGetMeasurements:
                 {"timestamp": "2025-09-13T21:00:00Z", "values": {"load": 100}},
                 {"timestamp": "2025-09-13T22:00:00Z", "values": {"load": 110}},
             ],
-            "units": {"load": "kW"},  # ✅ Added field
+            "units": {"load": "kW"},
         }
 
         response = client.get(
