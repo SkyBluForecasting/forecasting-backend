@@ -20,7 +20,9 @@ from .schemas import (
     AssetUpsertRequest,
     AssetUpsertResponse,
     DashboardResponse,
+    MeasurementInsertResponse,
     MeasurementsBatch,
+    MeasurementsResponse,
 )
 
 load_dotenv()
@@ -29,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Forecasting API",
-    description="API for serving solar/load forecasts",
+    description="SkyBlu Forecasting API Schema",
     version="1.0.0",
 )
 
@@ -100,22 +102,23 @@ async def read_active_constraints(
 
 
 @app.get(
-    "/dashboard/assets/{asset_uuid}/data/active",
+    "/dashboard/assets/{asset_uuid}/data",
     response_model=DashboardResponse,
-    summary="Get active dashboard data for an asset",
-    description="Returns the active forecast (+ available measurements) for a specific asset.",
+    summary="Get dashboard data for an asset",
+    description="Returns the last two forecasts (+ available measurements) for a specific asset.",
 )
 async def read_dashboard_asset_data(
     asset_uuid: str,
     token: str = Depends(get_token),
 ):
-    """Fetch active forecast and measurement dashboard data for a specific asset."""
+    """Fetch forecast and measurement dashboard data for a specific asset."""
     validate_token(token)
     return await get_dashboard_asset_data(asset_uuid)
 
 
 @app.post(
     "/assets/{asset_uuid}/measurements/",
+    response_model=MeasurementInsertResponse,
     summary="Insert measurements for an asset",
     description="Insert one or more measurement points for the given asset.",
 )
@@ -126,11 +129,17 @@ async def post_measurements(
 ):
     """Insert new measurements for an asset."""
     validate_token(token)
-    return await insert_measurements(asset_uuid, [m.dict() for m in data.measurements])
+    await insert_measurements(asset_uuid, [m.dict() for m in data.measurements])
+    return MeasurementInsertResponse(
+        asset_uuid=asset_uuid,
+        inserted_count=len(data.measurements),
+        message="Measurements inserted successfully",
+    )
 
 
 @app.get(
     "/assets/{asset_uuid}/measurements/",
+    response_model=MeasurementsResponse,
     summary="Get measurements for an asset",
     description="Fetch existing measurements for a specific asset within a time range.",
 )

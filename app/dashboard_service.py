@@ -1,63 +1,64 @@
-"""Functions for pulling and parsing data to display in dashboard."""
+"""Functions for pulling data from the DB for the dashboard."""
 
 from .db_utils import to_utc_iso
-from .forecast_service import get_active_forecast, get_forecast_rows
+from .forecast_service import get_forecast_rows, get_recent_forecasts
 from .measurement_service import get_all_measurements
 
 
 async def get_dashboard_asset_data(asset_uuid: str):
-    """Fetch dashboard data for a specific asset, including latest forecast and measurements.
-
-    Args:
-        asset_uuid (str): UUID of the asset to retrieve data for.
-    Returns:
-        dict: Dictionary containing the asset UUID, latest forecast information, and measurements.
-              Structure matches the DashboardResponse schema:
-              {
-                  "asset_uuid": str,
-                  "forecast": {
-                      "forecast_uuid": str,
-                      "run_uuid": str,
-                      "values": List[Dict[str, Any]]  # timestamp and forecast_kw
-                  } or None,
-                  "measurements": Dict[str, Any] or None  # metrics and values
-              }
-    """
-    # 1. Get Active Forecast
-    latest_forecast = await get_active_forecast(asset_uuid)
-    if not latest_forecast:
+    """Fetch dashboard data for an asset, including latest two forecasts and measurements."""
+    # Get last two forecasts
+    forecasts = await get_recent_forecasts(asset_uuid, limit=2)
+    if not forecasts:
         return {
             "asset_uuid": asset_uuid,
-            "forecast": None,
+            "active_forecasts": [],
+            "inactive_forecasts": [],
             "measurements": None,
         }
 
-    forecast_run_id = latest_forecast["forecast_run_id"]
+    # The latest one is active, second is inactive
+    latest_forecast = forecasts[0]
+    second_forecast = forecasts[1] if len(forecasts) > 1 else None
 
-    # 2. Fetch forecast values
-    forecast_values = await get_forecast_rows(forecast_run_id)
-    start_time = forecast_values[0]["timestamp"] if forecast_values else None
-    end_time = forecast_values[-1]["timestamp"] if forecast_values else None
+    # Fetch values for both
+    latest_values = await get_forecast_rows(latest_forecast["forecast_run_id"])
+    inactive_values = (
+        await get_forecast_rows(second_forecast["forecast_run_id"]) if second_forecast else []
+    )
 
-    # 3. Fetch measurements
-    measurements_values = (
+    # Determine overall time range for measurements
+    start_time = (
+        min(latest_values[0]["timestamp"], inactive_values[0]["timestamp"])
+        if latest_values and inactive_values
+        else latest_values[0]["timestamp"] if latest_values else None
+    )
+    end_time = (
+        max(latest_values[-1]["timestamp"], inactive_values[-1]["timestamp"])
+        if latest_values and inactive_values
+        else latest_values[-1]["timestamp"] if latest_values else None
+    )
+
+    measurements = (
         await get_all_measurements(asset_uuid, start_time, end_time)
         if start_time and end_time
         else {"metrics": [], "values": []}
     )
 
-    # 4. Convert timestamps in forecast_values to ISO for API response
-    forecast_values_iso = [
-        {"timestamp": to_utc_iso(r["timestamp"]), "forecast_kw": r["forecast_kw"]}
-        for r in forecast_values
-    ]
+    async def format_forecast(run):
+        values = await get_forecast_rows(run["forecast_run_id"])
+        return {
+            "forecast_run_id": run["forecast_run_id"],
+            "model_run_id": run.get("model_run_id"),
+            "values": [
+                {"timestamp": to_utc_iso(v["timestamp"]), "forecast_kw": v["forecast_kw"]}
+                for v in values
+            ],
+        }
 
     return {
         "asset_uuid": asset_uuid,
-        "forecast": {
-            "forecast_run_id": forecast_run_id,
-            "model_run_id": latest_forecast.get("model_run_id"),
-            "values": forecast_values_iso,
-        },
-        "measurements": measurements_values,
+        "active_forecasts": [await format_forecast(latest_forecast)],
+        "inactive_forecasts": ([await format_forecast(second_forecast)] if second_forecast else []),
+        "measurements": measurements,
     }
