@@ -1,4 +1,4 @@
-"""Functions for pulling data from the DB for the dashboard."""
+"""Functions for pulling and parsing data to display in dashboard."""
 
 from .db_utils import to_utc_iso
 from .forecast_service import get_forecast_rows, get_recent_forecasts
