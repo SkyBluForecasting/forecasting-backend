@@ -201,6 +201,7 @@ class TestReadDashboardAssetData:
                 {"timestamp": "2025-09-13T21:00:00Z", "values": {"metric1": 100}},
                 {"timestamp": "2025-09-13T22:00:00Z", "values": {"metric1": 110}},
             ],
+            "units": {"metric1": "kW"},
         }
 
         self.mock_dashboard_service.return_value = {
@@ -337,6 +338,7 @@ class TestGetMeasurements:
                 {"timestamp": "2025-09-13T21:00:00Z", "values": {"load": 100}},
                 {"timestamp": "2025-09-13T22:00:00Z", "values": {"load": 110}},
             ],
+            "units": {"load": "kW"},  # ✅ Added field
         }
 
         response = client.get(

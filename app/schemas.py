@@ -61,10 +61,11 @@ class MeasurementsValues(BaseModel):
 
 
 class MeasurementsResponse(BaseModel):
-    """Schema for the API response containing multiple measurements and associated metrics."""
+    """Time-series measurement data with associated units."""
 
     metrics: List[str]
-    values: List[MeasurementsValues]
+    units: Dict[str, str]  # e.g. {"load": "kW", "temp": "°C"}
+    values: List[Dict[str, Any]]  # [{"timestamp": ..., "values": {...}}]
 
 
 class MeasurementInsertResponse(BaseModel):
@@ -91,7 +92,7 @@ class ForecastRun(BaseModel):
     """Schema representing a single forecast run for an asset."""
 
     forecast_run_id: str
-    model_run_id: Optional[str]
+    model_run_id: str
     values: List[ForecastValue]
 
 
@@ -129,7 +130,7 @@ class ActiveConstraintsResponse(BaseModel):
 
 
 class DashboardResponse(BaseModel):
-    """Aggregated dashboard response containing active and inactive forecasts, and measurements."""
+    """Aggregated dashboard response containing active/inactive forecasts and measurements."""
 
     asset_uuid: str
     active_forecasts: List[ForecastRun]
@@ -164,6 +165,7 @@ class DashboardResponse(BaseModel):
                 ],
                 "measurements": {
                     "metrics": ["load", "temp"],
+                    "units": {"load": "kW", "temp": "C"},
                     "values": [
                         {
                             "timestamp": "2025-10-20T03:00:00Z",

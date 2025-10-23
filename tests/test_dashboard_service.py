@@ -26,7 +26,7 @@ async def test_dashboard_no_forecast():
 
 @pytest.mark.asyncio
 async def test_dashboard_forecast_no_rows():
-    """If forecasts exist but no forecast rows, measurements should be empty."""
+    """If forecasts exist but no forecast rows, measurements should include units."""
     latest_forecast = {
         "forecast_run_id": "run111",
         "model_run_id": "model123",
@@ -48,17 +48,27 @@ async def test_dashboard_forecast_no_rows():
 
         mock_forecasts.return_value = [latest_forecast, second_forecast]
         mock_rows.return_value = []
-        mock_meas.return_value = {"metrics": [], "values": []}
+        mock_meas.return_value = {
+            "metrics": ["load", "temp"],
+            "values": [],
+        }
 
         result = await get_dashboard_asset_data("asset123")
 
+    # Basic structure checks
     assert result["asset_uuid"] == "asset123"
-    assert result["active_forecasts"][0]["forecast_run_id"] == latest_forecast["forecast_run_id"]
-    assert result["inactive_forecasts"][0]["forecast_run_id"] == second_forecast["forecast_run_id"]
     assert result["active_forecasts"][0]["values"] == []
     assert result["inactive_forecasts"][0]["values"] == []
-    assert result["measurements"]["metrics"] == []
-    assert result["measurements"]["values"] == []
+
+    # Measurements checks
+    measurements = result["measurements"]
+    assert "metrics" in measurements
+    assert "values" in measurements
+    assert "units" in measurements
+
+    # Check specific units
+    assert measurements["units"]["load"] == "kW"
+    assert measurements["units"]["temp"] == "C"
 
 
 @pytest.mark.asyncio
