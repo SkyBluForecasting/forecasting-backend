@@ -133,8 +133,8 @@ class DashboardResponse(BaseModel):
     """Aggregated dashboard response containing active/inactive forecasts and measurements."""
 
     asset_uuid: str
-    active_forecasts: List[ForecastRun]
-    inactive_forecasts: List[ForecastRun]
+    latest_forecasts: List[ForecastRun]
+    previous_forecasts: List[ForecastRun]
     measurements: Optional[MeasurementsResponse]
 
     class Config:
