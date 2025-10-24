@@ -17,8 +17,8 @@ async def get_dashboard_asset_data(asset_uuid: str):
     if not forecasts:
         return {
             "asset_uuid": asset_uuid,
-            "active_forecasts": [],
-            "inactive_forecasts": [],
+            "latest_forecasts": [],
+            "previous_forecasts": [],
             "measurements": None,
         }
 
@@ -71,7 +71,7 @@ async def get_dashboard_asset_data(asset_uuid: str):
 
     return {
         "asset_uuid": asset_uuid,
-        "active_forecasts": [await format_forecast(latest_forecast)],
-        "inactive_forecasts": ([await format_forecast(second_forecast)] if second_forecast else []),
+        "latest_forecasts": [await format_forecast(latest_forecast)],
+        "previous_forecasts": ([await format_forecast(second_forecast)] if second_forecast else []),
         "measurements": measurements,
     }

@@ -19,8 +19,8 @@ async def test_dashboard_no_forecast():
         result = await get_dashboard_asset_data("asset123")
 
     assert result["asset_uuid"] == "asset123"
-    assert result["active_forecasts"] == []
-    assert result["inactive_forecasts"] == []
+    assert result["latest_forecasts"] == []
+    assert result["previous_forecasts"] == []
     assert result["measurements"] is None
 
 
@@ -57,8 +57,8 @@ async def test_dashboard_forecast_no_rows():
 
     # Basic structure checks
     assert result["asset_uuid"] == "asset123"
-    assert result["active_forecasts"][0]["values"] == []
-    assert result["inactive_forecasts"][0]["values"] == []
+    assert result["latest_forecasts"][0]["values"] == []
+    assert result["previous_forecasts"][0]["values"] == []
 
     # Measurements checks
     measurements = result["measurements"]
@@ -141,10 +141,10 @@ async def test_dashboard_forecast_with_rows_and_measurements():
 
     assert result["asset_uuid"] == "asset123"
     # Active forecast
-    assert result["active_forecasts"][0]["forecast_run_id"] == "run111"
-    assert result["active_forecasts"][0]["model_run_id"] == "model123"
+    assert result["latest_forecasts"][0]["forecast_run_id"] == "run111"
+    assert result["latest_forecasts"][0]["model_run_id"] == "model123"
     # Inactive forecast
-    assert result["inactive_forecasts"][0]["forecast_run_id"] == "run110"
-    assert result["inactive_forecasts"][0]["model_run_id"] == "model122"
+    assert result["previous_forecasts"][0]["forecast_run_id"] == "run110"
+    assert result["previous_forecasts"][0]["model_run_id"] == "model122"
     # Measurements
     assert result["measurements"] == measurements

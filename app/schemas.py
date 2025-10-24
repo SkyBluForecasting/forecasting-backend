@@ -143,7 +143,7 @@ class DashboardResponse(BaseModel):
         schema_extra = {
             "example": {
                 "asset_uuid": "K0A",
-                "active_forecasts": [
+                "latest_forecasts": [
                     {
                         "forecast_run_id": "forecast_run_1",
                         "model_run_id": "model_run_123",
@@ -153,7 +153,7 @@ class DashboardResponse(BaseModel):
                         ],
                     }
                 ],
-                "inactive_forecasts": [
+                "previous_forecasts": [
                     {
                         "forecast_run_id": "forecast_run_0",
                         "model_run_id": "model_run_122",

@@ -156,8 +156,8 @@ class TestReadDashboardAssetData:
         asset_uuid = "asset123"
         self.mock_dashboard_service.return_value = {
             "asset_uuid": asset_uuid,
-            "active_forecasts": [],
-            "inactive_forecasts": [],
+            "latest_forecasts": [],
+            "previous_forecasts": [],
             "measurements": None,
         }
 
@@ -169,8 +169,8 @@ class TestReadDashboardAssetData:
         assert response.status_code == 200
         data = response.json()
         assert data["asset_uuid"] == asset_uuid
-        assert data["active_forecasts"] == []
-        assert data["inactive_forecasts"] == []
+        assert data["latest_forecasts"] == []
+        assert data["previous_forecasts"] == []
         assert data["measurements"] is None
 
     def test_returns_forecasts_and_measurements(self, client):
@@ -206,8 +206,8 @@ class TestReadDashboardAssetData:
 
         self.mock_dashboard_service.return_value = {
             "asset_uuid": asset_uuid,
-            "active_forecasts": [active_forecast],
-            "inactive_forecasts": [inactive_forecast],
+            "latest_forecasts": [active_forecast],
+            "previous_forecasts": [inactive_forecast],
             "measurements": measurements,
         }
 
@@ -219,10 +219,10 @@ class TestReadDashboardAssetData:
         assert response.status_code == 200
         data = response.json()
         assert data["asset_uuid"] == asset_uuid
-        assert data["active_forecasts"][0]["forecast_run_id"] == "run111"
-        assert data["inactive_forecasts"][0]["forecast_run_id"] == "run110"
-        assert data["active_forecasts"][0]["values"] == active_forecast["values"]
-        assert data["inactive_forecasts"][0]["values"] == inactive_forecast["values"]
+        assert data["latest_forecasts"][0]["forecast_run_id"] == "run111"
+        assert data["previous_forecasts"][0]["forecast_run_id"] == "run110"
+        assert data["latest_forecasts"][0]["values"] == active_forecast["values"]
+        assert data["previous_forecasts"][0]["values"] == inactive_forecast["values"]
         assert data["measurements"] == measurements
 
     def test_invalid_asset_uuid_returns_404(self, client):
