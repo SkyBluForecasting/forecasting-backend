@@ -52,6 +52,29 @@ async def get_forecast_rows(forecast_run_id: str):
         return [{"timestamp": r["timestamp"], "forecast_kw": r["forecast_value"]} for r in rows]
 
 
+async def get_recent_forecasts(asset_uuid: str, limit: int = 2):
+    """Return the most recent N forecast_run rows for an asset."""
+    async with AsyncSessionLocal() as session:
+        q = (
+            select(
+                ForecastRun.forecast_run_id,
+                ForecastRun.prediction_job_id,
+                ForecastRun.model_run_id,
+                ForecastRun.asset_uuid,
+                ForecastRun.created_at,
+                ForecastRun.start_time,
+                ForecastRun.end_time,
+                ForecastRun.frequency_min,
+            )
+            .where(ForecastRun.asset_uuid == asset_uuid)
+            .order_by(ForecastRun.created_at.desc())
+            .limit(limit)
+        )
+        result = await session.execute(q)
+        rows = result.mappings().all()
+        return rows
+
+
 # TODO: Remove the following S3-related code after
 
 

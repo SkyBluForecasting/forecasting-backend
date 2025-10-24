@@ -1,13 +1,108 @@
-"""Pydantic schemas for constraint-related data models."""
+"""Pydantic schemas for assets, forecasts, measurements, constraints, and dashboard responses."""
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# ============================================================
+# 🟦 Asset Schemas
+# ============================================================
+
+
+class AssetIn(BaseModel):
+    """Schema for an individual asset received via API, including optional nested children."""
+
+    id: str = Field(..., example="K0A")
+    name: str = Field(..., example="K0A")
+    type: str = Field(..., example="substation")
+    capacity_kw: Optional[float] = Field(None, example=80000.0)
+    assets: List["AssetIn"] = []  # Nested children
+
+
+class AssetUpsertRequest(BaseModel):
+    """Request schema for bulk inserting or updating multiple assets."""
+
+    assets: List[AssetIn]
+
+
+class AssetUpsertResponse(BaseModel):
+    """Response summarizing the results of a bulk asset insertion or update."""
+
+    inserted: int
+    updated: int
+    total: int
+
+
+# ============================================================
+# 🟩 Measurement Schemas
+# ============================================================
+
+
+class MeasurementIn(BaseModel):
+    """Schema for a single measurement input for an asset."""
+
+    metric: Literal["load", "temp"]
+    timestamp: datetime
+    value: float
+
+
+class MeasurementsBatch(BaseModel):
+    """Schema representing a batch of measurements to insert for a single asset."""
+
+    measurements: List[MeasurementIn]
+
+
+class MeasurementsValues(BaseModel):
+    """Schema for measurement values at a specific timestamp."""
+
+    timestamp: str
+    values: Dict[str, Any]
+
+
+class MeasurementsResponse(BaseModel):
+    """Time-series measurement data with associated units."""
+
+    metrics: List[str]
+    units: Dict[str, str]  # e.g. {"load": "kW", "temp": "°C"}
+    values: List[Dict[str, Any]]  # [{"timestamp": ..., "values": {...}}]
+
+
+class MeasurementInsertResponse(BaseModel):
+    """Response model after inserting measurements for a specific asset."""
+
+    asset_uuid: str
+    inserted_count: int
+    message: str
+
+
+# ============================================================
+# 🟨 Forecast Schemas
+# ============================================================
+
+
+class ForecastValue(BaseModel):
+    """Schema representing a single forecasted value at a specific timestamp."""
+
+    timestamp: str
+    forecast_kw: float
+
+
+class ForecastRun(BaseModel):
+    """Schema representing a single forecast run for an asset."""
+
+    forecast_run_id: str
+    model_run_id: str
+    values: List[ForecastValue]
+
+
+# ============================================================
+# 🟥 Constraint Schemas
+# ============================================================
+
 
 class Constraint(BaseModel):
-    """Represent a single time-based constraint for an asset."""
+    """Schema representing a single time-based constraint for an asset."""
 
     start_time: Optional[datetime] = Field(None, example="2025-09-13T21:00:00Z")
     end_time: Optional[datetime] = Field(None, example="2025-09-13T22:00:00Z")
@@ -15,75 +110,68 @@ class Constraint(BaseModel):
 
 
 class AssetConstraints(BaseModel):
-    """Represent constraints associated with a specific asset and forecast."""
+    """Schema representing constraints associated with a specific asset and forecast run."""
 
     asset_uuid: str = Field(..., example="M4C")
-    forecast_run_id: str = Field(..., example="11111111-1111-1111-1111-111111111111")  # updated
+    forecast_run_id: str = Field(..., example="11111111-1111-1111-1111-111111111111")
     frequency_min: int = Field(..., example=60)
     constraints: List[Constraint]
 
 
 class ActiveConstraintsResponse(BaseModel):
-    """Represent the response model containing active constraints per asset."""
+    """Schema representing the response containing all active constraints per asset."""
 
     assets: List[AssetConstraints]
 
 
+# ============================================================
+# 🟧 Dashboard Schema (aggregated response)
+# ============================================================
+
+
 class DashboardResponse(BaseModel):
-    """Represent active forecast and measurements for an asset."""
+    """Aggregated dashboard response containing active/inactive forecasts and measurements."""
 
     asset_uuid: str
-    forecast: Optional[Dict[str, Any]]
-    measurements: Optional[Dict[str, Any]]
+    latest_forecasts: List[ForecastRun]
+    previous_forecasts: List[ForecastRun]
+    measurements: Optional[MeasurementsResponse]
 
+    class Config:
+        """Example data for Dashboard Response."""
 
-class MeasurementIn(BaseModel):
-    """Single measurement input for an asset."""
-
-    metric: Literal["load", "temp"]  # Only these two allowed
-    timestamp: datetime
-    value: float
-
-
-class MeasurementsBatch(BaseModel):
-    """Batch of measurements to insert for an asset."""
-
-    measurements: List[MeasurementIn]
-
-
-class MeasurementOut(BaseModel):
-    """Single measurement output for an asset."""
-
-    timestamp: datetime
-    values: Dict[str, float]  # metric_name -> value
-
-
-class MeasurementsResponse(BaseModel):
-    """Grouped measurements response."""
-
-    metrics: List[str]
-    values: List[MeasurementOut]
-
-
-class AssetIn(BaseModel):
-    """Schema for an asset received via API."""
-
-    id: str = Field(..., example="K0A")
-    name: str = Field(..., example="K0A")
-    type: str = Field(..., example="substation")
-    capacity_kw: Optional[float] = Field(None, example=80000.0)
-    assets: List["AssetIn"] = []  # for nested children, optional
-
-
-class AssetUpsertRequest(BaseModel):
-    """Request schema for bulk inserting/updating assets."""
-
-    assets: List[AssetIn]
-
-
-class AssetUpsertResponse(BaseModel):
-    """Response summarizing a bulk asset sync."""
-
-    inserted: int
-    updated: int
-    total: int
+        schema_extra = {
+            "example": {
+                "asset_uuid": "K0A",
+                "latest_forecasts": [
+                    {
+                        "forecast_run_id": "forecast_run_1",
+                        "model_run_id": "model_run_123",
+                        "values": [
+                            {"timestamp": "2025-10-20T03:00:00Z", "forecast_kw": 45.2},
+                            {"timestamp": "2025-10-20T04:00:00Z", "forecast_kw": 46.1},
+                        ],
+                    }
+                ],
+                "previous_forecasts": [
+                    {
+                        "forecast_run_id": "forecast_run_0",
+                        "model_run_id": "model_run_122",
+                        "values": [
+                            {"timestamp": "2025-10-19T03:00:00Z", "forecast_kw": 42.7},
+                            {"timestamp": "2025-10-19T04:00:00Z", "forecast_kw": 43.5},
+                        ],
+                    }
+                ],
+                "measurements": {
+                    "metrics": ["load", "temp"],
+                    "units": {"load": "kW", "temp": "C"},
+                    "values": [
+                        {
+                            "timestamp": "2025-10-20T03:00:00Z",
+                            "values": {"load": 42.3, "temp": 15.4},
+                        }
+                    ],
+                },
+            }
+        }

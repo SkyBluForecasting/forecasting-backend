@@ -142,7 +142,7 @@ class TestReadActiveConstraints:
 # Dashboard endpoint tests
 # -----------------------------
 class TestReadDashboardAssetData:
-    """Test cases for the /dashboard/assets/{asset_uuid}/data/active endpoint."""
+    """Test cases for the /dashboard/assets/{asset_uuid}/data endpoint."""
 
     @pytest.fixture(autouse=True)
     def _setup_mock(self):
@@ -151,66 +151,78 @@ class TestReadDashboardAssetData:
             self.mock_dashboard_service = mock
             yield
 
-    def test_no_forecast_returns_none(self, client):
-        """Return 200 with None forecast and measurements when no active forecast."""
+    def test_no_forecast_returns_empty_lists(self, client):
+        """Return 200 with empty forecast lists and measurements None when no forecasts."""
         asset_uuid = "asset123"
         self.mock_dashboard_service.return_value = {
             "asset_uuid": asset_uuid,
-            "forecast": None,
+            "latest_forecasts": [],
+            "previous_forecasts": [],
             "measurements": None,
         }
 
         response = client.get(
-            f"/dashboard/assets/{asset_uuid}/data/active",
+            f"/dashboard/assets/{asset_uuid}/data",
             headers={"Authorization": "Bearer fake-token"},
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["asset_uuid"] == asset_uuid
-        assert data["forecast"] is None
+        assert data["latest_forecasts"] == []
+        assert data["previous_forecasts"] == []
         assert data["measurements"] is None
 
-    def test_returns_forecast_and_measurements(self, client):
-        """Return 200 with forecast values and measurements."""
+    def test_returns_forecasts_and_measurements(self, client):
+        """Return 200 with active/inactive forecasts and measurements."""
         asset_uuid = "asset123"
-        forecast_uuid = "11111111-1111-1111-1111-111111111111"
-        run_uuid = "run123"
 
-        forecast_values = [
-            {"timestamp": "2025-09-13T21:00:00Z", "forecast_kw": 50},
-            {"timestamp": "2025-09-13T22:00:00Z", "forecast_kw": 55},
-        ]
+        active_forecast = {
+            "forecast_run_id": "run111",
+            "model_run_id": "model123",
+            "values": [
+                {"timestamp": "2025-09-13T21:00:00Z", "forecast_kw": 50},
+                {"timestamp": "2025-09-13T22:00:00Z", "forecast_kw": 55},
+            ],
+        }
+
+        inactive_forecast = {
+            "forecast_run_id": "run110",
+            "model_run_id": "model122",
+            "values": [
+                {"timestamp": "2025-09-12T21:00:00Z", "forecast_kw": 40},
+                {"timestamp": "2025-09-12T22:00:00Z", "forecast_kw": 45},
+            ],
+        }
 
         measurements = {
             "metrics": ["metric1"],
             "values": [
-                {"timestamp": "2025-09-13T21:00:00Z", "metric1": 100},
-                {"timestamp": "2025-09-13T22:00:00Z", "metric1": 110},
+                {"timestamp": "2025-09-13T21:00:00Z", "values": {"metric1": 100}},
+                {"timestamp": "2025-09-13T22:00:00Z", "values": {"metric1": 110}},
             ],
+            "units": {"metric1": "kW"},
         }
 
         self.mock_dashboard_service.return_value = {
             "asset_uuid": asset_uuid,
-            "forecast": {
-                "forecast_uuid": forecast_uuid,
-                "forecast_run_id": run_uuid,  # <-- updated to match Pydantic schema
-                "values": forecast_values,
-            },
+            "latest_forecasts": [active_forecast],
+            "previous_forecasts": [inactive_forecast],
             "measurements": measurements,
         }
 
         response = client.get(
-            f"/dashboard/assets/{asset_uuid}/data/active",
+            f"/dashboard/assets/{asset_uuid}/data",
             headers={"Authorization": "Bearer fake-token"},
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["asset_uuid"] == asset_uuid
-        assert data["forecast"]["forecast_uuid"] == forecast_uuid
-        assert data["forecast"]["forecast_run_id"] == run_uuid
-        assert data["forecast"]["values"] == forecast_values
+        assert data["latest_forecasts"][0]["forecast_run_id"] == "run111"
+        assert data["previous_forecasts"][0]["forecast_run_id"] == "run110"
+        assert data["latest_forecasts"][0]["values"] == active_forecast["values"]
+        assert data["previous_forecasts"][0]["values"] == inactive_forecast["values"]
         assert data["measurements"] == measurements
 
     def test_invalid_asset_uuid_returns_404(self, client):
@@ -221,11 +233,13 @@ class TestReadDashboardAssetData:
         )
 
         response = client.get(
-            f"/dashboard/assets/{asset_uuid}/data/active",
+            f"/dashboard/assets/{asset_uuid}/data",
             headers={"Authorization": "Bearer fake-token"},
         )
 
+        # Assert the endpoint returns 404
         assert response.status_code == 404
+        assert response.json() == {"detail": "Dashboard data not found"}
 
 
 # -----------------------------
@@ -243,7 +257,7 @@ class TestPostMeasurements:
 
     def test_successful_insert(self, client):
         """Return 200 when measurements are successfully inserted."""
-        self.mock_insert_service.return_value = {"status": "success", "inserted": 2}
+        self.mock_insert_service.return_value = None  # endpoint builds response from input
 
         payload = {
             "measurements": [
@@ -253,28 +267,36 @@ class TestPostMeasurements:
         }
 
         response = client.post(
-            "/assets/asset123/measurements",
+            "/assets/asset123/measurements/",
             json=payload,
             headers={"Authorization": "Bearer fake-token"},
         )
 
         assert response.status_code == 200
-        assert response.json() == {"status": "success", "inserted": 2}
+        assert response.json() == {
+            "asset_uuid": "asset123",
+            "inserted_count": 2,
+            "message": "Measurements inserted successfully",
+        }
 
     def test_empty_measurements_returns_no_data(self, client):
-        """Return 200 with no data message if measurements list is empty."""
-        self.mock_insert_service.return_value = {"status": "no data provided"}
+        """Return 200 with zero inserted_count if measurements list is empty."""
+        self.mock_insert_service.return_value = None
 
         payload = {"measurements": []}
 
         response = client.post(
-            "/assets/asset123/measurements",
+            "/assets/asset123/measurements/",
             json=payload,
             headers={"Authorization": "Bearer fake-token"},
         )
 
         assert response.status_code == 200
-        assert response.json() == {"status": "no data provided"}
+        assert response.json() == {
+            "asset_uuid": "asset123",
+            "inserted_count": 0,
+            "message": "Measurements inserted successfully",
+        }
 
     def test_database_error_returns_500(self, client):
         """Return 500 when database insert fails."""
@@ -287,7 +309,7 @@ class TestPostMeasurements:
         }
 
         response = client.post(
-            "/assets/asset123/measurements",
+            "/assets/asset123/measurements/",
             json=payload,
             headers={"Authorization": "Bearer fake-token"},
         )
@@ -316,6 +338,7 @@ class TestGetMeasurements:
                 {"timestamp": "2025-09-13T21:00:00Z", "values": {"load": 100}},
                 {"timestamp": "2025-09-13T22:00:00Z", "values": {"load": 110}},
             ],
+            "units": {"load": "kW"},
         }
 
         response = client.get(

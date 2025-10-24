@@ -164,3 +164,45 @@ class TestGetLatestForecast:
             result = get_latest_forecast("test")
             assert result["asset_id"] == "test"
             assert result["values"] == [{"timestamp": "2025-07-16T00:00:00Z", "value_kw": 123.45}]
+
+
+@pytest.mark.asyncio
+class TestGetRecentForecasts:
+    """Tests for get_recent_forecasts function."""
+
+    async def test_returns_last_two_forecasts(self):
+        """Returns a list of the most recent forecasts up to the given limit."""
+        mock_forecasts = [
+            {"forecast_run_id": "run2", "model_run_id": "model2", "asset_uuid": "asset123"},
+            {"forecast_run_id": "run1", "model_run_id": "model1", "asset_uuid": "asset123"},
+        ]
+
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.all.return_value = mock_forecasts
+
+        async_mock_session = AsyncMock()
+        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
+            from app.forecast_service import get_recent_forecasts
+
+            result = await get_recent_forecasts("asset123", limit=2)
+
+        assert len(result) == 2
+        assert result[0]["forecast_run_id"] == "run2"
+        assert result[1]["forecast_run_id"] == "run1"
+
+    async def test_returns_empty_list_if_no_forecasts(self):
+        """Returns empty list if no recent forecasts exist."""
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.all.return_value = []
+
+        async_mock_session = AsyncMock()
+        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
+            from app.forecast_service import get_recent_forecasts
+
+            result = await get_recent_forecasts("asset123", limit=2)
+
+        assert result == []
