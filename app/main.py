@@ -5,11 +5,10 @@ from datetime import datetime
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import FastAPI, HTTPException
+from fastapi.security import HTTPBearer
 
 from .asset_service import upsert_assets
-from .auth import validate_token
 from .constraint_service import get_active_constraints
 from .dashboard_service import get_dashboard_asset_data
 from .db_client import close_db_pool
@@ -45,35 +44,38 @@ async def shutdown_event():
 security = HTTPBearer()
 
 
-async def get_token(
-    request: Request, credentials: HTTPAuthorizationCredentials = Security(security)
-) -> str:
-    """Extract and validate the JWT token from the Authorization header.
+# async def get_token(
+#     request: Request, credentials: HTTPAuthorizationCredentials = Security(security)
+# ) -> str:
+#     """Extract and validate the JWT token from the Authorization header.
 
-    Args:
-        request: The FastAPI request object.
-        credentials: The HTTP authorization credentials.
+#     Args:
+#         request: The FastAPI request object.
+#         credentials: The HTTP authorization credentials.
 
-    Returns:
-        str: The extracted JWT token.
+#     Returns:
+#         str: The extracted JWT token.
 
-    Notes:
-            - If the Authorization header is missing or invalid, FastAPI's
-            HTTPBearer will return a 403 before this function is called.
-    """
-    # Log the full raw Authorization header as received in the HTTP request
-    raw_auth_header = request.headers.get("Authorization")
-    logger.info(f"Raw Authorization header: {repr(raw_auth_header)}")
+#     Notes:
+#             - If the Authorization header is missing or invalid, FastAPI's
+#             HTTPBearer will return a 403 before this function is called.
+#     """
+#     # Log the full raw Authorization header as received in the HTTP request
+#     raw_auth_header = request.headers.get("Authorization")
+#     logger.info(f"Raw Authorization header: {repr(raw_auth_header)}")
 
-    token = credentials.credentials.strip()  # FastAPI's HTTPBearer already strips "Bearer "
+#     token = credentials.credentials.strip()  # FastAPI's HTTPBearer already strips "Bearer "
 
-    logger.info(f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}")
+#     logger.info(f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}")
 
-    return token
+#     return token
 
 
 @app.get("/forecast/latest")
-def read_latest_forecast(asset_id: str, token: str = Depends(get_token)):
+def read_latest_forecast(
+    asset_id: str,
+    # token: str = Depends(get_token)
+):
     """Get the latest forecast for a specific asset.
 
     Args:
@@ -83,7 +85,7 @@ def read_latest_forecast(asset_id: str, token: str = Depends(get_token)):
     Returns:
         dict: The latest forecast data.
     """
-    validate_token(token)
+    # validate_token(token)
     return get_latest_forecast(asset_id)
 
 
@@ -94,10 +96,11 @@ def read_latest_forecast(asset_id: str, token: str = Depends(get_token)):
     description="Returns a list of active constraints grouped by asset.",
 )
 async def read_active_constraints(
-    asset_uuid: Optional[str] = None, token: str = Depends(get_token)
+    asset_uuid: Optional[str] = None,
+    # token: str = Depends(get_token)
 ):
     """Fetch active constraints for all assets or a specific asset."""
-    validate_token(token)
+    # validate_token(token)
     return await get_active_constraints(asset_uuid)
 
 
@@ -109,10 +112,10 @@ async def read_active_constraints(
 )
 async def read_dashboard_asset_data(
     asset_uuid: str,
-    token: str = Depends(get_token),
+    # token: str = Depends(get_token),
 ):
     """Fetch forecast and measurement dashboard data for a specific asset."""
-    validate_token(token)
+    # validate_token(token)
     return await get_dashboard_asset_data(asset_uuid)
 
 
@@ -125,10 +128,10 @@ async def read_dashboard_asset_data(
 async def post_measurements(
     asset_uuid: str,
     data: MeasurementsBatch,
-    token: str = Depends(get_token),
+    # token: str = Depends(get_token),
 ):
     """Insert new measurements for an asset."""
-    validate_token(token)
+    # validate_token(token)
     await insert_measurements(asset_uuid, [m.dict() for m in data.measurements])
     return MeasurementInsertResponse(
         asset_uuid=asset_uuid,
@@ -147,10 +150,10 @@ async def get_measurements(
     asset_uuid: str,
     start_time: str,
     end_time: str,
-    token: str = Depends(get_token),
+    # token: str = Depends(get_token),
 ):
     """Retrieve measurements for an asset."""
-    validate_token(token)
+    # validate_token(token)
 
     try:
         start_dt = datetime.fromisoformat(start_time)
@@ -170,8 +173,8 @@ async def get_measurements(
 )
 async def post_assets(
     req: AssetUpsertRequest,
-    token: str = Depends(get_token),
+    # token: str = Depends(get_token),
 ):
     """Add or update multiple assets without deleting existing ones."""
-    validate_token(token)
+    # validate_token(token)
     return await upsert_assets(req.assets)
