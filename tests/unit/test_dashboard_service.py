@@ -63,7 +63,6 @@ async def test_dashboard_forecast_no_rows():
 
     # Measurements checks
     measurements = result["measurements"]
-    print(measurements)
     assert "metrics" in measurements
     assert "values" in measurements
     assert "units" in measurements
