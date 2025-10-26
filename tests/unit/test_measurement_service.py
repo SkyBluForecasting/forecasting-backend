@@ -10,7 +10,7 @@ from app.measurement_service import get_all_measurements, insert_measurements
 
 @pytest.mark.asyncio
 async def test_get_all_measurements_basic_formatting():
-    """Test measurements are grouped by timestamp and metrics sorted (with 'values' dict)."""
+    """Test measurements are grouped by timestamp and metrics sorted."""
     mock_rows = [
         {
             "timestamp": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -34,15 +34,17 @@ async def test_get_all_measurements_basic_formatting():
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session):
+    # Patch METRIC_UNITS to a controlled mapping
+    with patch("app.measurement_service.METRIC_UNITS", {"power": "kW", "voltage": "V"}), patch(
+        "app.measurement_service.AsyncSessionLocal", return_value=async_mock_session
+    ):
         result = await get_all_measurements(
             "asset123",
             datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
             datetime(2025, 10, 7, 14, 0, tzinfo=timezone.utc),
         )
 
-    assert "metrics" in result
-    assert "values" in result
+    assert set(result.keys()) == {"metrics", "values", "units"}
     assert result["metrics"] == ["power", "voltage"]
     assert len(result["values"]) == 2
 
@@ -54,31 +56,34 @@ async def test_get_all_measurements_basic_formatting():
     second_value = result["values"][1]
     assert second_value["timestamp"] == "2025-10-07T13:00:00Z"
     assert second_value["values"]["power"] == 105.0
-    assert "voltage" not in second_value["values"]
+    assert "voltage" in second_value["values"]  # now filled in as None
+    assert result["units"] == {"power": "kW", "voltage": "V"}
 
 
 @pytest.mark.asyncio
 async def test_get_all_measurements_empty():
-    """Test empty measurement results return empty lists."""
+    """Test empty measurement results return empty lists and empty units."""
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = []
 
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session):
+    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session), patch(
+        "app.measurement_service.METRIC_UNITS", {"power": "kW"}
+    ):
         result = await get_all_measurements(
             "asset123",
             datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
             datetime(2025, 10, 7, 14, 0, tzinfo=timezone.utc),
         )
 
-    assert result == {"metrics": [], "values": []}
+    assert result == {"metrics": [], "values": [], "units": {}}
 
 
 @pytest.mark.asyncio
 async def test_get_all_measurements_single_metric():
-    """Test measurements with only one metric (using 'values' dict)."""
+    """Test measurements with only one metric (using 'values' dict and units)."""
     mock_rows = [
         {
             "timestamp": datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -92,7 +97,9 @@ async def test_get_all_measurements_single_metric():
     async_mock_session = AsyncMock()
     async_mock_session.__aenter__.return_value.execute.return_value = mock_result
 
-    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session):
+    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session), patch(
+        "app.measurement_service.METRIC_UNITS", {"power": "kW"}
+    ):
         result = await get_all_measurements(
             "asset123",
             datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
@@ -102,6 +109,7 @@ async def test_get_all_measurements_single_metric():
     assert result["metrics"] == ["power"]
     assert result["values"][0]["timestamp"] == "2025-10-07T12:00:00Z"
     assert result["values"][0]["values"]["power"] == 100.0
+    assert result["units"] == {"power": "kW"}
 
 
 @pytest.mark.asyncio

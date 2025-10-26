@@ -2,12 +2,7 @@
 
 from .db_utils import to_utc_iso
 from .forecast_service import get_forecast_rows, get_recent_forecasts
-from .measurement_service import get_all_measurements
-
-METRIC_UNITS = {
-    "load": "kW",
-    "temp": "C",
-}
+from .measurement_service import METRIC_UNITS, get_all_measurements
 
 
 async def get_dashboard_asset_data(asset_uuid: str):
@@ -48,15 +43,11 @@ async def get_dashboard_asset_data(asset_uuid: str):
     if start_time and end_time:
         measurements = await get_all_measurements(asset_uuid, start_time, end_time)
     else:
-        measurements = {"metrics": [], "values": []}
-
-    # Always include units for known metrics
-    for metric in METRIC_UNITS:
-        if metric not in measurements.get("metrics", []):
-            measurements.setdefault("metrics", []).append(metric)
-    measurements["units"] = {
-        metric: METRIC_UNITS.get(metric, "") for metric in measurements["metrics"]
-    }
+        measurements = {
+            "metrics": [],
+            "values": [],
+            "units": {metric: METRIC_UNITS.get(metric, "") for metric in METRIC_UNITS},
+        }
 
     async def format_forecast(run):
         values = await get_forecast_rows(run["forecast_run_id"])

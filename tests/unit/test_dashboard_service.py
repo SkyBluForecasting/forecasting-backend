@@ -50,6 +50,7 @@ async def test_dashboard_forecast_no_rows():
         mock_rows.return_value = []
         mock_meas.return_value = {
             "metrics": ["load", "temp"],
+            "units": {"load": "kW", "temp": "C"},
             "values": [],
         }
 
@@ -62,6 +63,7 @@ async def test_dashboard_forecast_no_rows():
 
     # Measurements checks
     measurements = result["measurements"]
+    print(measurements)
     assert "metrics" in measurements
     assert "values" in measurements
     assert "units" in measurements
