@@ -58,7 +58,7 @@ jobs:
       run: black . --check  # pyproject.toml will supply line-length
 
     - name: Lint with Flake8 (Black-compatible)
-      run: flake8 . --count --ignore=D203,W503,E203 --show-source --statistics --max-line-length=105
+      run: flake8 . --count --ignore=D203,W503,E203 --show-source --statistics --max-line-length=100
 
     - name: Check imports with isort
       run: isort . --check-only  # pyproject.toml will supply profile and line-length
