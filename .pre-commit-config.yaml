@@ -25,5 +25,5 @@ repos:
     -   id: flake8
         additional_dependencies: [flake8-docstrings]
         args:
-        - --max-line-length=100
+        - --max-line-length=105
         - --ignore=D203,W503,E203
