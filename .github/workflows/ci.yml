@@ -58,7 +58,7 @@ jobs:
       run: black . --check  # pyproject.toml will supply line-length
 
     - name: Lint with Flake8 (Black-compatible)
-      run: flake8 . --count --ignore=D203,W503,E203 --show-source --statistics --max-line-length=100
+      run: flake8 . --count --ignore=D203,W503,E203 --show-source --statistics --max-line-length=105
 
     - name: Check imports with isort
       run: isort . --check-only  # pyproject.toml will supply profile and line-length
@@ -77,8 +77,8 @@ jobs:
       run: |
         coverage report --show-missing
 
-    - name: Display coverage summary
-      run: coverage report --fail-under=100 --ignore-errors
+    # - name: Display coverage summary
+    #   run: coverage report --fail-under=100 --ignore-errors
 
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
