@@ -11,6 +11,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from .db_client import AsyncSessionLocal
 from .db_utils import to_utc, to_utc_iso
 
+METRIC_UNITS = {
+    "load": "kW",
+    "temp": "C",
+}
+
 
 async def get_all_measurements(asset_uuid: str, start_time: datetime, end_time: datetime) -> Dict:
     """Return all measurements grouped by timestamp with all metrics."""
@@ -31,20 +36,30 @@ async def get_all_measurements(asset_uuid: str, start_time: datetime, end_time: 
         rows = result.mappings().all()
 
     if not rows:
-        return {"metrics": [], "values": []}
+        return {"metrics": [], "values": [], "units": {}}
 
     # pivot rows by timestamp
     grouped = defaultdict(dict)
-    metrics_set = set()
+    metrics_set = set(METRIC_UNITS.keys())
+
     for r in rows:
         ts = to_utc_iso(r["timestamp"])
         grouped[ts][r["metric"]] = r["value"]
         metrics_set.add(r["metric"])
 
+    # Ensure every timestamp has all metrics (fill missing with None)
+    for ts_values in grouped.values():
+        for metric in metrics_set:
+            ts_values.setdefault(metric, None)
+
     # convert to list of dicts with a 'values' dict
     values = [{"timestamp": ts, "values": metrics} for ts, metrics in sorted(grouped.items())]
 
-    return {"metrics": sorted(metrics_set), "values": values}
+    return {
+        "metrics": sorted(metrics_set),
+        "values": values,
+        "units": {metric: METRIC_UNITS.get(metric, "") for metric in metrics_set},
+    }
 
 
 CHUNK_SIZE = 200  # safe default
