@@ -11,7 +11,15 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Async SQLAlchemy engine
-engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    future=True,
+    pool_size=20,
+    max_overflow=40,
+    pool_timeout=60,
+    pool_recycle=1800,
+)
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
