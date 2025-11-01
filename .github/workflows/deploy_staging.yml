@@ -87,4 +87,13 @@ jobs:
               -e DATABASE_URL=${{ secrets.SQLALCHEMY_URL }} \
               -p 80:8000 \
               forecasting-api
+
+            echo "--- RUNNING CLEANUP CONTAINER ---"
+            docker run -d \
+              --name cleanup \
+              --restart unless-stopped \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v /tmp:/tmp \
+              forecasting-api \
+              sh -c "while true; do /tasks/cleanup.sh; sleep 86400; done"
           EOF

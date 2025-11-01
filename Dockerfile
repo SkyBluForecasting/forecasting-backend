@@ -17,3 +17,6 @@ RUN pip install --upgrade pip && \
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Make cleanup script executable
+RUN chmod +x /tasks/cleanup.sh
