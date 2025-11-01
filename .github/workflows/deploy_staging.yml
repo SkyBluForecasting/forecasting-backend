@@ -95,5 +95,5 @@ jobs:
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v /tmp:/tmp \
               forecasting-api \
-              sh -c "while true; do /tasks/cleanup.sh; sleep 86400; done"
+              sh -c "while true; do /forecasting-backend/tasks/cleanup.sh; sleep 86400; done"
           EOF
