@@ -67,7 +67,7 @@ jobs:
 
       - name: Copy cleanup script to EC2 and make executable
         run: |
-          scp -o StrictHostKeyChecking=no tasks/cleanup.sh ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:/home/ec2-user/cleanup.sh
+          scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/app/tasks/cleanup.sh ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:/home/ec2-user/cleanup.sh
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} "chmod +x /home/ec2-user/cleanup.sh"
 
       - name: Install cron job for cleanup
