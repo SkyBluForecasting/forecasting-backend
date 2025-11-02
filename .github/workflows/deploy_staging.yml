@@ -65,6 +65,19 @@ jobs:
           scp -o StrictHostKeyChecking=no -r . ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/
           scp -o StrictHostKeyChecking=no -r wheels/* ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:~/forecasting-backend/wheels/
 
+      - name: Copy cleanup script to EC2 and make executable
+        run: |
+          scp -o StrictHostKeyChecking=no tasks/cleanup.sh ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:/home/ec2-user/cleanup.sh
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} "chmod +x /home/ec2-user/cleanup.sh"
+
+      - name: Install cron job for cleanup
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
+            # Check if the cron job already exists
+            crontab -l | grep -q '/home/ec2-user/cleanup.sh' || \
+              (crontab -l 2>/dev/null; echo "0 2 * * * /home/ec2-user/cleanup.sh >> /home/ec2-user/cleanup.log 2>&1") | crontab -
+          EOF
+
       - name: Build Docker image and restart container
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
@@ -87,13 +100,4 @@ jobs:
               -e DATABASE_URL=${{ secrets.SQLALCHEMY_URL }} \
               -p 80:8000 \
               forecasting-api
-
-            echo "--- RUNNING CLEANUP CONTAINER ---"
-            docker run -d \
-              --name cleanup \
-              --restart unless-stopped \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v /tmp:/tmp \
-              forecasting-api \
-              sh -c "while true; do /app/tasks/cleanup.sh; sleep 86400; done"
           EOF
