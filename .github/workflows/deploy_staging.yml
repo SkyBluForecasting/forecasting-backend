@@ -70,6 +70,14 @@ jobs:
           scp -o StrictHostKeyChecking=no $GITHUB_WORKSPACE/app/tasks/cleanup.sh ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }}:/home/ec2-user/cleanup.sh
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} "chmod +x /home/ec2-user/cleanup.sh"
 
+      - name: Install cron on EC2 host
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
+            sudo dnf install -y cronie
+            sudo systemctl enable crond
+            sudo systemctl start crond
+          EOF
+
       - name: Install cron job for cleanup
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
