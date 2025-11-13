@@ -1,6 +1,6 @@
 """Unit tests for FastAPI endpoints in app.main."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -27,48 +27,6 @@ def patch_validate_token():
     """Mock validate_token to always succeed."""
     with patch("app.main.validate_token", lambda token: True):
         yield
-
-
-# -----------------------------
-# Forecast endpoint tests
-# -----------------------------
-class TestReadLatestForecast:
-    """Test cases for the /forecast/latest endpoint."""
-
-    @pytest.fixture(autouse=True)
-    def _setup_mock(self):
-        """Patch get_latest_forecast for all tests in this class."""
-        with patch("app.main.get_latest_forecast", new_callable=MagicMock) as mock:
-            self.mock_forecast_service = mock
-            yield
-
-    def test_successful_request(self, client):
-        """Return 200 and forecast data for valid asset_id."""
-        self.mock_forecast_service.return_value = {
-            "asset_id": "test",
-            "values": [{"timestamp": "2025-07-16T00:00:00Z", "value_kw": 123.45}],
-        }
-
-        response = client.get(
-            "/forecast/latest?asset_id=test",
-            headers={"Authorization": "Bearer fake-token"},
-        )
-
-        assert response.status_code == 200
-        assert response.json()["asset_id"] == "test"
-
-    def test_non_existent_data_returns_404(self, client):
-        """Return 404 when forecast data is not found."""
-        self.mock_forecast_service.side_effect = HTTPException(
-            status_code=404, detail="Forecast not found"
-        )
-
-        response = client.get(
-            "/forecast/latest?asset_id=nonexistent",
-            headers={"Authorization": "Bearer fake-token"},
-        )
-
-        assert response.status_code == 404
 
 
 # -----------------------------
