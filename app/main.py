@@ -13,7 +13,6 @@ from .auth import validate_token
 from .constraint_service import get_active_constraints
 from .dashboard_service import get_dashboard_asset_data
 from .db_client import close_db_pool
-from .forecast_service import get_latest_forecast
 from .measurement_service import get_all_measurements, insert_measurements
 from .schemas import (
     ActiveConstraintsResponse,
@@ -70,21 +69,6 @@ async def get_token(
     logger.info(f"Token format check - Length: {len(token)}, First 20 chars: {token[:20]}")
 
     return token
-
-
-@app.get("/forecast/latest")
-def read_latest_forecast(asset_id: str, token: str = Depends(get_token)):
-    """Get the latest forecast for a specific asset.
-
-    Args:
-        asset_id: The asset identifier.
-        token: The JWT token for authentication.
-
-    Returns:
-        dict: The latest forecast data.
-    """
-    validate_token(token)
-    return get_latest_forecast(asset_id)
 
 
 @app.get(

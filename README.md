@@ -1,11 +1,11 @@
 # Forecasting Backend
 
-A FastAPI backend service that serves solar/load forecasts from S3 to authorized clients via secure endpoints.
+A FastAPI backend service that serves forecast data from the DB to authorized clients via secure endpoints.
 
 ## Features
 
 - Secure API endpoints with Auth0 authentication
-- S3 integration for retrieving forecast data
+- DB integration for retrieving forecast and measurement data
 - FastAPI-based REST API with OpenAPI documentation
 - Environment-based configuration
 - Docker support for easy deployment
@@ -14,7 +14,7 @@ A FastAPI backend service that serves solar/load forecasts from S3 to authorized
 ## Prerequisites
 
 - Python 3.8 or higher
-- AWS credentials configured (for S3 access)
+- AWS credentials configured
 - Auth0 account and API configuration
 - pip (Python package manager)
 - Docker (optional, for containerized deployment)
@@ -46,7 +46,6 @@ source venv/bin/activate  # On Windows, use: venv\Scripts\activate
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_DEFAULT_REGION=us-east-2
-S3_BUCKET=forecasting-forecasts
 
 # Auth0 Configuration
 AUTH0_DOMAIN=your-auth0-domain.auth0.com
