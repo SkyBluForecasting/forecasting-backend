@@ -5,10 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.forecast_service import (
-    get_active_forecast,
-    get_forecast_rows,
-)
+from app.forecast_service import get_active_forecast, get_forecast_rows
 
 
 @pytest.mark.asyncio
