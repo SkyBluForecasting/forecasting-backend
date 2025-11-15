@@ -5,10 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.dashboard_service import (
-    compute_error_metrics,
-    get_dashboard_asset_data,
-)
+from app.dashboard_service import compute_error_metrics, get_dashboard_asset_data
 
 
 # -----------------------------
