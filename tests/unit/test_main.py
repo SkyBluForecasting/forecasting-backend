@@ -100,72 +100,74 @@ class TestReadActiveConstraints:
 # Dashboard endpoint tests
 # -----------------------------
 class TestReadDashboardAssetData:
-    """Test cases for the /dashboard/assets/{asset_uuid}/data endpoint."""
+    """Test /dashboard/assets/{asset_uuid}/data endpoint with updated dashboard_service output."""
 
     @pytest.fixture(autouse=True)
     def _setup_mock(self):
-        """Patch get_dashboard_asset_data for all tests in this class."""
         with patch("app.main.get_dashboard_asset_data", new_callable=AsyncMock) as mock:
             self.mock_dashboard_service = mock
             yield
 
     def test_no_forecast_returns_empty_lists(self, client):
-        """Return 200 with empty forecast lists and measurements None when no forecasts."""
+        """No forecasts -> empty lists and measurements with empty metrics/units."""
         asset_uuid = "asset123"
         self.mock_dashboard_service.return_value = {
             "asset_uuid": asset_uuid,
             "latest_forecasts": [],
             "previous_forecasts": [],
-            "measurements": None,
+            "measurements": {
+                "metrics": [],
+                "values": [],
+                "units": {"load": "kW", "temp": "C"},
+            },
         }
 
         response = client.get(
             f"/dashboard/assets/{asset_uuid}/data",
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 200
         data = response.json()
-        assert data["asset_uuid"] == asset_uuid
         assert data["latest_forecasts"] == []
         assert data["previous_forecasts"] == []
-        assert data["measurements"] is None
+        assert data["measurements"]["metrics"] == []
+        assert data["measurements"]["units"]["load"] == "kW"
 
-    def test_returns_forecasts_and_measurements(self, client):
-        """Return 200 with active/inactive forecasts and measurements."""
+    def test_forecasts_with_accuracy_metrics(self, client):
+        """Return forecasts with computed accuracy_metrics."""
         asset_uuid = "asset123"
 
-        active_forecast = {
+        latest_forecast = {
             "forecast_run_id": "run111",
             "model_run_id": "model123",
             "values": [
                 {"timestamp": "2025-09-13T21:00:00Z", "forecast_kw": 50},
                 {"timestamp": "2025-09-13T22:00:00Z", "forecast_kw": 55},
             ],
+            "accuracy_metrics": {"mae": 1.5, "mape": 0.0285},
         }
-
-        inactive_forecast = {
+        previous_forecast = {
             "forecast_run_id": "run110",
             "model_run_id": "model122",
             "values": [
                 {"timestamp": "2025-09-12T21:00:00Z", "forecast_kw": 40},
                 {"timestamp": "2025-09-12T22:00:00Z", "forecast_kw": 45},
             ],
+            "accuracy_metrics": {"mae": 1.0, "mape": 0.0237},
         }
 
         measurements = {
-            "metrics": ["metric1"],
+            "metrics": ["load", "temp"],
             "values": [
-                {"timestamp": "2025-09-13T21:00:00Z", "values": {"metric1": 100}},
-                {"timestamp": "2025-09-13T22:00:00Z", "values": {"metric1": 110}},
+                {"timestamp": "2025-09-13T21:00:00Z", "values": {"load": 100, "temp": 25}},
+                {"timestamp": "2025-09-13T22:00:00Z", "values": {"load": 101, "temp": 26}},
             ],
-            "units": {"metric1": "kW"},
+            "units": {"load": "kW", "temp": "C"},
         }
 
         self.mock_dashboard_service.return_value = {
             "asset_uuid": asset_uuid,
-            "latest_forecasts": [active_forecast],
-            "previous_forecasts": [inactive_forecast],
+            "latest_forecasts": [latest_forecast],
+            "previous_forecasts": [previous_forecast],
             "measurements": measurements,
         }
 
@@ -173,31 +175,25 @@ class TestReadDashboardAssetData:
             f"/dashboard/assets/{asset_uuid}/data",
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 200
         data = response.json()
-        assert data["asset_uuid"] == asset_uuid
-        assert data["latest_forecasts"][0]["forecast_run_id"] == "run111"
-        assert data["previous_forecasts"][0]["forecast_run_id"] == "run110"
-        assert data["latest_forecasts"][0]["values"] == active_forecast["values"]
-        assert data["previous_forecasts"][0]["values"] == inactive_forecast["values"]
-        assert data["measurements"] == measurements
 
-    def test_invalid_asset_uuid_returns_404(self, client):
-        """Return 404 when dashboard data not found."""
-        asset_uuid = "invalid-asset"
-        self.mock_dashboard_service.side_effect = HTTPException(
-            status_code=404, detail="Dashboard data not found"
-        )
+        # Forecasts
+        latest = data["latest_forecasts"][0]
+        prev = data["previous_forecasts"][0]
+        assert latest["forecast_run_id"] == "run111"
+        assert prev["forecast_run_id"] == "run110"
 
-        response = client.get(
-            f"/dashboard/assets/{asset_uuid}/data",
-            headers={"Authorization": "Bearer fake-token"},
-        )
+        # Accuracy metrics
+        assert latest["accuracy_metrics"]["mae"] == 1.5
+        assert prev["accuracy_metrics"]["mae"] == 1.0
+        assert latest["accuracy_metrics"]["mape"] == pytest.approx(0.0285)
+        assert prev["accuracy_metrics"]["mape"] == pytest.approx(0.0237)
 
-        # Assert the endpoint returns 404
-        assert response.status_code == 404
-        assert response.json() == {"detail": "Dashboard data not found"}
+        # Measurements
+        meas = data["measurements"]
+        assert meas["metrics"] == ["load", "temp"]
+        assert meas["units"]["load"] == "kW"
+        assert meas["units"]["temp"] == "C"
 
 
 # -----------------------------

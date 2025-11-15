@@ -1,8 +1,34 @@
 """Functions for pulling and parsing data to display in dashboard."""
 
 from .db_utils import to_utc_iso
+from .forecast_errors_service import get_forecast_errors
 from .forecast_service import get_forecast_rows, get_recent_forecasts
 from .measurement_service import METRIC_UNITS, get_all_measurements
+
+
+def compute_error_metrics(measurements, errors):
+    """Compute MAE and MAPE for a forecast run."""
+    # Create a map of load measurement per timestamp. E.g., {timestamp: load measurement}
+    actual_map = {
+        m["timestamp"]: m["values"]["load"]
+        for m in measurements["values"]
+        if "load" in m["values"] and m["values"]["load"] is not None
+    }
+
+    abs_errors = []
+    abs_percent_errors = []
+
+    for ts, err in errors.items():
+        actual = actual_map.get(ts)
+        if actual is None:
+            continue
+        abs_errors.append(abs(err))
+        if actual != 0:
+            abs_percent_errors.append(abs(err / actual))
+
+    mae = sum(abs_errors) / len(abs_errors) if abs_errors else None
+    mape = (sum(abs_percent_errors) / len(abs_percent_errors)) if abs_percent_errors else None
+    return {"mae": mae, "mape": mape}
 
 
 async def get_dashboard_asset_data(asset_uuid: str):
@@ -51,6 +77,9 @@ async def get_dashboard_asset_data(asset_uuid: str):
 
     async def format_forecast(run):
         values = await get_forecast_rows(run["forecast_run_id"])
+        errors = await get_forecast_errors(run["forecast_run_id"])
+        metrics = compute_error_metrics(measurements, errors)
+
         return {
             "forecast_run_id": run["forecast_run_id"],
             "model_run_id": run.get("model_run_id"),
@@ -58,6 +87,10 @@ async def get_dashboard_asset_data(asset_uuid: str):
                 {"timestamp": to_utc_iso(v["timestamp"]), "forecast_kw": v["forecast_kw"]}
                 for v in values
             ],
+            "accuracy_metrics": {
+                "mae": float(metrics["mae"]) if metrics["mae"] is not None else None,
+                "mape": float(metrics["mape"]) if metrics["mape"] is not None else None,
+            },
         }
 
     return {
