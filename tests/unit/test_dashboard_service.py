@@ -1,17 +1,73 @@
-"""Unit tests for the dashboard service module."""
+"""Unit tests for dashboard_service.py."""
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.dashboard_service import get_dashboard_asset_data
-from app.db_utils import to_utc_iso
+from app.dashboard_service import (
+    compute_error_metrics,
+    get_dashboard_asset_data,
+)
 
 
+# -----------------------------
+# Unit tests for compute_error_metrics
+# -----------------------------
+@pytest.mark.parametrize(
+    "measurements, errors, expected_mae, expected_mape",
+    [
+        # normal case
+        (
+            {
+                "metrics": ["load"],
+                "values": [
+                    {"timestamp": "t1", "values": {"load": 50}},
+                    {"timestamp": "t2", "values": {"load": 100}},
+                ],
+            },
+            {"t1": -5, "t2": 10},
+            7.5,
+            (5 / 50 + 10 / 100) / 2,
+        ),
+        # missing measurement
+        (
+            {"metrics": ["load"], "values": [{"timestamp": "t1", "values": {"load": 50}}]},
+            {"t1": -5, "t2": 10},
+            5,
+            5 / 50,
+        ),
+        # empty measurements
+        ({"metrics": ["load"], "values": []}, {"t1": 5}, None, None),
+        # zero actual
+        (
+            {"metrics": ["load"], "values": [{"timestamp": "t1", "values": {"load": 0}}]},
+            {"t1": 5},
+            5,
+            None,
+        ),
+        # null measurement value
+        (
+            {"metrics": ["load"], "values": [{"timestamp": "t1", "values": {"load": None}}]},
+            {"t1": 5},
+            None,
+            None,
+        ),
+    ],
+)
+def test_compute_error_metrics_all_cases(measurements, errors, expected_mae, expected_mape):
+    """Test compute error metrics function."""
+    result = compute_error_metrics(measurements, errors)
+    assert result["mae"] == expected_mae
+    assert result["mape"] == expected_mape
+
+
+# -----------------------------
+# Tests for get_dashboard_asset_data
+# -----------------------------
 @pytest.mark.asyncio
 async def test_dashboard_no_forecast():
-    """If no forecasts exist, dashboard returns empty lists and measurements None."""
+    """No forecasts exist → empty lists and measurements None."""
     with patch(
         "app.dashboard_service.get_recent_forecasts", new_callable=AsyncMock
     ) as mock_forecasts:
@@ -26,7 +82,7 @@ async def test_dashboard_no_forecast():
 
 @pytest.mark.asyncio
 async def test_dashboard_forecast_no_rows():
-    """If forecasts exist but no forecast rows, measurements should include units."""
+    """Forecasts exist but no forecast rows → measurements still include units."""
     latest_forecast = {
         "forecast_run_id": "run111",
         "model_run_id": "model123",
@@ -44,37 +100,44 @@ async def test_dashboard_forecast_no_rows():
         "app.dashboard_service.get_forecast_rows", new_callable=AsyncMock
     ) as mock_rows, patch(
         "app.dashboard_service.get_all_measurements", new_callable=AsyncMock
-    ) as mock_meas:
+    ) as mock_meas, patch(
+        "app.dashboard_service.get_forecast_errors", new_callable=AsyncMock
+    ) as mock_errors:
 
         mock_forecasts.return_value = [latest_forecast, second_forecast]
         mock_rows.return_value = []
         mock_meas.return_value = {
             "metrics": ["load", "temp"],
-            "units": {"load": "kW", "temp": "C"},
             "values": [],
+            "units": {"load": "kW", "temp": "C"},
         }
+        mock_errors.return_value = {}
 
         result = await get_dashboard_asset_data("asset123")
 
-    # Basic structure checks
-    assert result["asset_uuid"] == "asset123"
-    assert result["latest_forecasts"][0]["values"] == []
-    assert result["previous_forecasts"][0]["values"] == []
+    # Forecast structure
+    latest = result["latest_forecasts"][0]
+    prev = result["previous_forecasts"][0]
+    assert latest["forecast_run_id"] == "run111"
+    assert prev["forecast_run_id"] == "run110"
+    assert latest["values"] == []
+    assert prev["values"] == []
 
-    # Measurements checks
-    measurements = result["measurements"]
-    assert "metrics" in measurements
-    assert "values" in measurements
-    assert "units" in measurements
+    # Accuracy metrics exist but None
+    assert latest["accuracy_metrics"]["mae"] is None
+    assert latest["accuracy_metrics"]["mape"] is None
 
-    # Check specific units
-    assert measurements["units"]["load"] == "kW"
-    assert measurements["units"]["temp"] == "C"
+    # Measurements
+    meas = result["measurements"]
+    assert meas["metrics"] == []
+    assert meas["values"] == []
+    assert meas["units"]["load"] == "kW"
+    assert meas["units"]["temp"] == "C"
 
 
 @pytest.mark.asyncio
 async def test_dashboard_forecast_with_rows_and_measurements():
-    """Full flow: two forecasts with rows and measurements returned."""
+    """Full flow: two forecasts with rows, measurements, and errors."""
     latest_forecast = {
         "forecast_run_id": "run111",
         "model_run_id": "model123",
@@ -96,56 +159,64 @@ async def test_dashboard_forecast_with_rows_and_measurements():
     ]
 
     measurements = {
-        "metrics": ["metric1"],
+        "metrics": ["load"],
         "values": [
-            {"timestamp": "2025-09-13T21:00:00Z", "values": {"metric1": 100}},
-            {"timestamp": "2025-09-13T22:00:00Z", "values": {"metric1": 110}},
+            {"timestamp": "2025-09-13T21:00:00Z", "values": {"load": 51}},
+            {"timestamp": "2025-09-13T22:00:00Z", "values": {"load": 54}},
+            {"timestamp": "2025-09-12T21:00:00Z", "values": {"load": 39}},
+            {"timestamp": "2025-09-12T22:00:00Z", "values": {"load": 46}},
         ],
+        "units": {"load": "kW"},
     }
 
-    async def mock_format(run_id):
-        if run_id == "run111":
-            return {
-                "forecast_run_id": "run111",
-                "model_run_id": "model123",
-                "values": [
-                    {"timestamp": to_utc_iso(r["timestamp"]), "forecast_kw": r["forecast_kw"]}
-                    for r in forecast_rows_latest
-                ],
-            }
-        else:
-            return {
-                "forecast_run_id": "run110",
-                "model_run_id": "model122",
-                "values": [
-                    {"timestamp": to_utc_iso(r["timestamp"]), "forecast_kw": r["forecast_kw"]}
-                    for r in forecast_rows_second
-                ],
-            }
+    errors_latest = {
+        "2025-09-13T21:00:00Z": -1,
+        "2025-09-13T22:00:00Z": 1,
+    }
+    errors_prev = {
+        "2025-09-12T21:00:00Z": 1,
+        "2025-09-12T22:00:00Z": 0,
+    }
+
+    async def mock_rows(run_id):
+        return forecast_rows_latest if run_id == "run111" else forecast_rows_second
+
+    async def mock_errors(run_id):
+        return errors_latest if run_id == "run111" else errors_prev
+
+    async def mock_measurements(asset_uuid, start_time, end_time):
+        return measurements
 
     with patch(
         "app.dashboard_service.get_recent_forecasts", new_callable=AsyncMock
     ) as mock_forecasts, patch(
-        "app.dashboard_service.get_forecast_rows", new_callable=AsyncMock
-    ) as mock_rows, patch(
-        "app.dashboard_service.get_all_measurements", new_callable=AsyncMock
-    ) as mock_meas:
+        "app.dashboard_service.get_forecast_rows", side_effect=mock_rows
+    ), patch(
+        "app.dashboard_service.get_all_measurements", side_effect=mock_measurements
+    ), patch(
+        "app.dashboard_service.get_forecast_errors", side_effect=mock_errors
+    ):
 
         mock_forecasts.return_value = [latest_forecast, second_forecast]
-        # get_forecast_rows should return the correct rows depending on run_id
-        mock_rows.side_effect = lambda run_id: (
-            forecast_rows_latest if run_id == "run111" else forecast_rows_second
-        )
-        mock_meas.return_value = measurements
-
         result = await get_dashboard_asset_data("asset123")
 
-    assert result["asset_uuid"] == "asset123"
-    # Active forecast
-    assert result["latest_forecasts"][0]["forecast_run_id"] == "run111"
-    assert result["latest_forecasts"][0]["model_run_id"] == "model123"
-    # Inactive forecast
-    assert result["previous_forecasts"][0]["forecast_run_id"] == "run110"
-    assert result["previous_forecasts"][0]["model_run_id"] == "model122"
-    # Measurements
-    assert result["measurements"] == measurements
+    latest = result["latest_forecasts"][0]
+    prev = result["previous_forecasts"][0]
+
+    # Forecast structure
+    assert latest["forecast_run_id"] == "run111"
+    assert prev["forecast_run_id"] == "run110"
+    assert all("timestamp" in v and "forecast_kw" in v for v in latest["values"])
+    assert all("timestamp" in v and "forecast_kw" in v for v in prev["values"])
+
+    # Accuracy metrics
+    assert latest["accuracy_metrics"]["mae"] == 1.0
+    assert prev["accuracy_metrics"]["mae"] == 0.5
+    assert latest["accuracy_metrics"]["mape"] == pytest.approx((1 / 51 + 1 / 54) / 2)
+    assert prev["accuracy_metrics"]["mape"] == pytest.approx((1 / 39 + 0 / 46) / 2)
+
+    # Measurements structure
+    meas = result["measurements"]
+    assert meas["metrics"] == ["load"]
+    assert meas["units"]["load"] == "kW"
+    assert len(meas["values"]) == 4

@@ -88,12 +88,20 @@ class ForecastValue(BaseModel):
     forecast_kw: float
 
 
+class AccuracyMetrics(BaseModel):
+    """Schema representing accuracy metrics for a forecast run."""
+
+    mae: Optional[float]
+    mape: Optional[float]
+
+
 class ForecastRun(BaseModel):
     """Schema representing a single forecast run for an asset."""
 
     forecast_run_id: str
     model_run_id: str
     values: List[ForecastValue]
+    accuracy_metrics: Optional[AccuracyMetrics]
 
 
 # ============================================================
@@ -151,6 +159,7 @@ class DashboardResponse(BaseModel):
                             {"timestamp": "2025-10-20T03:00:00Z", "forecast_kw": 45.2},
                             {"timestamp": "2025-10-20T04:00:00Z", "forecast_kw": 46.1},
                         ],
+                        "accuracy_metrics": {"mae": 4, "mape": 6},
                     }
                 ],
                 "previous_forecasts": [
@@ -161,6 +170,7 @@ class DashboardResponse(BaseModel):
                             {"timestamp": "2025-10-19T03:00:00Z", "forecast_kw": 42.7},
                             {"timestamp": "2025-10-19T04:00:00Z", "forecast_kw": 43.5},
                         ],
+                        "accuracy_metrics": {"mae": 4, "mape": 6},
                     }
                 ],
                 "measurements": {

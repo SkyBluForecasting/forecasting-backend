@@ -1,0 +1,19 @@
+"""Functions for pulling and pushing forecast error metrics."""
+
+from forecasting_db.models import ForecastError
+from sqlalchemy import select
+
+from .db_client import AsyncSessionLocal
+from .db_utils import to_utc_iso
+
+
+async def get_forecast_errors(run_id: str):
+    """Return {timestamp_str: error} for a forecast run (timestamps in ISO UTC)."""
+    async with AsyncSessionLocal() as session:
+        q = select(ForecastError.timestamp, ForecastError.error).where(
+            ForecastError.forecast_run_id == run_id
+        )
+        rows = (await session.execute(q)).mappings().all()
+
+    # Convert datetime keys to ISO strings
+    return {to_utc_iso(row["timestamp"]): row["error"] for row in rows}
