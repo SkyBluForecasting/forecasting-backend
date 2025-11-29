@@ -3,11 +3,42 @@
 import logging
 
 from forecasting_db.models import Asset
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from .db_client import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
+
+
+async def fetch_assets(asset_uuid: str | None = None):
+    """
+    Fetch asset records from the database.
+
+    Args:
+        asset_uuid (str | None): Optional filter to return a single asset.
+
+    Returns:
+        List[dict]: List of asset property dicts.
+    """
+    async with AsyncSessionLocal() as session:
+        stmt = select(Asset)
+        if asset_uuid:
+            stmt = stmt.where(Asset.asset_uuid == asset_uuid)
+
+        result = await session.execute(stmt)
+        rows = result.scalars().all()
+
+        return [
+            {
+                "asset_uuid": a.asset_uuid,
+                "name": a.name,
+                "asset_type": a.asset_type,
+                "capacity_kw": a.capacity_kw,
+                "parent_uuid": a.parent_uuid,
+            }
+            for a in rows
+        ]
 
 
 async def upsert_assets(assets):

@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.asset_service import upsert_assets
+from app.asset_service import fetch_assets, upsert_assets
+from app.schemas import AssetResponse
 
 
 class MockAsset:
@@ -74,3 +75,71 @@ async def test_upsert_assets_logs_info(monkeypatch, caplog):
 
     assert any("Upserted 1 assets" in msg for msg in caplog.messages), caplog.messages
     assert result == {"inserted": 1, "updated": 0, "total": 1}
+
+
+@pytest.mark.asyncio
+async def test_fetch_assets_returns_all(monkeypatch):
+    """Test that fetch_assets returns all assets when no asset_uuid is given."""
+    # Create mock rows returned from DB
+    mock_asset1 = AssetResponse(
+        asset_uuid="uuid1",
+        name="Solar Farm",
+        asset_type="solar",
+        capacity_kw=500,
+        parent_uuid=None,
+    )
+    mock_asset2 = AssetResponse(
+        asset_uuid="uuid2",
+        name="Battery",
+        asset_type="battery",
+        capacity_kw=200,
+        parent_uuid=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+
+    # scalars().all() → returns list of ORM objects
+    mock_result.scalars.return_value.all.return_value = [mock_asset1, mock_asset2]
+    mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+    monkeypatch.setattr("app.asset_service.AsyncSessionLocal", lambda: mock_session)
+
+    result = await fetch_assets()
+
+    assert len(result) == 2
+    assert result[0]["asset_uuid"] == "uuid1"
+    assert result[1]["asset_uuid"] == "uuid2"
+
+    mock_session.__aenter__.return_value.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_fetch_assets_filters_by_uuid(monkeypatch):
+    """Test that fetch_assets filters the query when asset_uuid is provided."""
+    mock_asset = AssetResponse(
+        asset_uuid="uuid123",
+        name="Substation A",
+        asset_type="substation",
+        capacity_kw=80000,
+        parent_uuid=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+
+    # scalars().all() should return a 1-item list
+    mock_result.scalars.return_value.all.return_value = [mock_asset]
+    mock_session.__aenter__.return_value.execute.return_value = mock_result
+
+    monkeypatch.setattr("app.asset_service.AsyncSessionLocal", lambda: mock_session)
+
+    result = await fetch_assets("uuid123")
+
+    # Validate result
+    assert len(result) == 1
+    assert result[0]["asset_uuid"] == "uuid123"
+    assert result[0]["name"] == "Substation A"
+
+    # Assert the query executed
+    mock_session.__aenter__.return_value.execute.assert_awaited_once()

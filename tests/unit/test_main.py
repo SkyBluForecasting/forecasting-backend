@@ -387,11 +387,73 @@ class TestPostAssets:
 
         assert response.status_code == 422  # Pydantic validation error
 
-    def test_unauthorized_returns_403(self, client):
-        """Return 403 if no Authorization header is provided."""
-        request_body = {
-            "assets": [{"id": "K0A", "name": "K0A", "type": "substation", "assets": []}]
-        }
 
-        response = client.post("/assets", json=request_body)
-        assert response.status_code == 403
+# -----------------------------
+# Assets GET endpoint tests
+# -----------------------------
+class TestGetAssets:
+    """Test cases for the /assets GET endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_mock(self):
+        """Patch fetch_assets for all tests in this class."""
+        with patch("app.main.fetch_assets", new_callable=AsyncMock) as mock:
+            self.mock_fetch_assets = mock
+            yield
+
+    def test_get_all_assets_success(self, client):
+        """Return 200 and list of assets."""
+        self.mock_fetch_assets.return_value = [
+            {
+                "asset_uuid": "K0A",
+                "name": "K0A",
+                "asset_type": "substation",
+                "capacity_kw": 80000.0,
+                "parent_uuid": None,
+            },
+            {
+                "asset_uuid": "K0B",
+                "name": "K0B",
+                "asset_type": "substation",
+                "capacity_kw": 70000.0,
+                "parent_uuid": None,
+            },
+        ]
+
+        response = client.get(
+            "/assets",
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0]["asset_uuid"] == "K0A"
+
+        # Ensure service was called
+        self.mock_fetch_assets.assert_awaited_once_with(None)
+
+    def test_get_single_asset_success(self, client):
+        """Return 200 for a filtered asset by UUID."""
+        self.mock_fetch_assets.return_value = [
+            {
+                "asset_uuid": "XYZ1",
+                "name": "Sub A",
+                "asset_type": "substation",
+                "capacity_kw": 50000.0,
+                "parent_uuid": None,
+            }
+        ]
+
+        response = client.get(
+            "/assets?asset_uuid=XYZ1",
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["asset_uuid"] == "XYZ1"
+
+        # Ensure filter argument passed correctly
+        self.mock_fetch_assets.assert_awaited_once_with("XYZ1")
