@@ -10,6 +10,16 @@ from pydantic import BaseModel, Field
 # ============================================================
 
 
+class AssetResponse(BaseModel):
+    """Schema returned when fetching asset records."""
+
+    asset_uuid: str
+    name: str
+    asset_type: str
+    capacity_kw: Optional[float]
+    parent_uuid: Optional[str]
+
+
 class AssetIn(BaseModel):
     """Schema for an individual asset received via API, including optional nested children."""
 
