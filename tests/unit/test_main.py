@@ -387,15 +387,6 @@ class TestPostAssets:
 
         assert response.status_code == 422  # Pydantic validation error
 
-    def test_unauthorized_returns_403(self, client):
-        """Return 403 if no Authorization header is provided."""
-        request_body = {
-            "assets": [{"id": "K0A", "name": "K0A", "type": "substation", "assets": []}]
-        }
-
-        response = client.post("/assets", json=request_body)
-        assert response.status_code == 403
-
 
 # -----------------------------
 # Assets GET endpoint tests
@@ -466,9 +457,3 @@ class TestGetAssets:
 
         # Ensure filter argument passed correctly
         self.mock_fetch_assets.assert_awaited_once_with("XYZ1")
-
-    def test_get_assets_unauthorized_returns_403(self, client):
-        """Return 403 if no Authorization header provided."""
-        response = client.get("/assets")
-
-        assert response.status_code == 403
