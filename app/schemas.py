@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
+from forecasting_db.models import AssetType
 from pydantic import BaseModel, Field
 
 # ============================================================
@@ -31,7 +32,7 @@ class AssetIn(BaseModel):
 
     id: str = Field(..., example="K0A")
     name: str = Field(..., example="K0A")
-    type: str = Field(..., example="distribution_substation")  # TODO: There is a schema for this
+    type: AssetType = Field(..., example="distribution_substation")
     capacity_kw: Optional[float] = Field(None, example=80000.0)
     measured: bool = Field(False, example=True)
     assets: List["AssetIn"] = []

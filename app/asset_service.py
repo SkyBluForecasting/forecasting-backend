@@ -1,11 +1,14 @@
 """Service for inserting or updating assets."""
 
 import logging
+from typing import List
 
-from forecasting_db.models import Asset
+from forecasting_db.models import Asset, AssetType
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.schemas import AssetIn
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +89,9 @@ async def fetch_assets(session: AsyncSession, asset_uuid: str | None = None):
     return tree
 
 
-async def upsert_assets(session: AsyncSession, assets):
+async def upsert_assets(session: AsyncSession, assets: List[AssetIn]):
     """
-    Bulk insert or update nested assets in the database.
+    Bulk insert or update nested assets.
 
     Args:
         session (AsyncSession): The database session to use.
@@ -104,7 +107,7 @@ async def upsert_assets(session: AsyncSession, assets):
             rows_by_uuid[a.id] = {
                 "asset_uuid": a.id,
                 "name": a.name,
-                "asset_type": a.type,
+                "asset_type": AssetType[a.type],
                 "capacity_kw": a.capacity_kw,
                 "measured": a.measured,
                 "parent_uuid": parent_uuid,
