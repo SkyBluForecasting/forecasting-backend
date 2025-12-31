@@ -84,12 +84,10 @@ jobs:
         coverage report -m
         coverage xml -o coverage_unit.xml
 
-    - name: Run integration tests with coverage
+    - name: Run integration tests
       env:
         DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/test_forecasting_db
       run: |
         # Wait for Postgres
         until pg_isready -h localhost -p 5432 -U postgres; do sleep 1; done
-        PYTHONPATH=${{ github.workspace }} coverage run --source=app -m pytest --asyncio-mode=auto tests/integration/
-        coverage report -m
-        coverage xml -o coverage_integration.xml
+        PYTHONPATH=${{ github.workspace }} pytest --asyncio-mode=auto tests/integration/
