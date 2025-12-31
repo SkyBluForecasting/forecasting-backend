@@ -142,3 +142,39 @@ async def test_fetch_assets_filters_by_uuid():
     root = result[0]
     assert root["asset_uuid"] == "uuid1"
     assert root["children"][0]["asset_uuid"] == "uuid2"
+
+
+@pytest.mark.asyncio
+async def test_fetch_assets_filters_by_uuid_nested():
+    """Test fetch_assets returns subtree when the target is nested deeper."""
+    rows = [
+        MockAssetRow("uuid1", "Root", "system", 0, None, 0, False),
+        MockAssetRow("uuid2", "Child", "distribution_substation", 100, "uuid1", 1, False),
+        MockAssetRow("uuid3", "Grandchild", "distribution_substation", 50, "uuid2", 2, False),
+    ]
+    session = make_mock_session(rows)
+
+    # Filter for the grandchild, triggers recursive find_subtree
+    result = await fetch_assets(session, "uuid3")
+
+    # The result should be just the subtree starting at uuid3
+    assert len(result) == 1
+    node = result[0]
+    assert node["asset_uuid"] == "uuid3"
+    assert node["children"] == []  # No further children
+
+
+@pytest.mark.asyncio
+async def test_fetch_assets_filters_by_uuid_not_found():
+    """Test fetch_assets returns empty list when the UUID is not in the tree."""
+    rows = [
+        MockAssetRow("uuid1", "Root", "system", 0, None, 0, False),
+        MockAssetRow("uuid2", "Child", "distribution_substation", 100, "uuid1", 1, False),
+    ]
+    session = make_mock_session(rows)
+
+    # Filter for a UUID that doesn't exist
+    result = await fetch_assets(session, "nonexistent_uuid")
+
+    # Should return empty list because subtree not found
+    assert result == []
