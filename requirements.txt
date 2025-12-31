@@ -8,14 +8,14 @@ authlib
 python-dotenv
 pytest
 httpx
-moto  # for mocking boto3 in tests
+moto
 requests
 psycopg2-binary
 asyncpg
 aiosqlite
 
 # Internal Packages
-forecasting-db==2.0.0
+forecasting-db==2.1.0
 
 
 # Development dependencies

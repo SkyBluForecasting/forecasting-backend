@@ -17,7 +17,7 @@ A FastAPI backend service that serves forecast data from the DB to authorized cl
 - AWS credentials configured
 - Auth0 account and API configuration
 - pip (Python package manager)
-- Docker (optional, for containerized deployment)
+- Docker (required for integration tests, optional for containerized deployment)
 - ngrok (optional, for exposing endpoints)
 
 
@@ -108,12 +108,41 @@ Note: The `scope` parameter is required to get a token with the necessary permis
 
 ## Testing
 
-Run the test suite:
+The test suite includes both unit tests and integration tests. Unit tests use mocks and don't require external services. Integration tests use a real PostgreSQL database running in a Docker container.
+
+### Running Tests
+
+**Run all tests (unit + integration):**
 ```bash
 pytest
 ```
 
-To run tests and also check coverage:
+**Run only unit tests:**
+```bash
+pytest tests/unit/
+```
+
+**Run only integration tests:**
+```bash
+pytest tests/integration/
+```
+
+**Note:** Integration tests require Docker to be running. If Docker is not available, integration tests will be automatically skipped with a helpful message. To run integration tests:
+1. Start Docker Desktop (or ensure Docker daemon is running)
+2. Start a docker container with
+```
+docker run --name forecasting-test-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=password \
+  -e POSTGRES_DB=test_forecasting_db \
+  -p 5432:5432 \
+  -d postgres:15
+```
+3. Run: `pytest tests/integration/`
+
+### Test Coverage
+
+**Run tests with coverage report:**
 ```bash
 coverage run --source=app -m pytest tests && coverage report -m
 ```

@@ -5,19 +5,20 @@ from datetime import datetime
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .asset_service import fetch_assets, upsert_assets
 from .auth import validate_token
 from .constraint_service import get_active_constraints
 from .dashboard_service import get_dashboard_asset_data
-from .db_client import close_db_pool
+from .db_client import close_db_pool, get_db
 from .measurement_service import get_all_measurements, insert_measurements
 from .schemas import (
     ActiveConstraintsResponse,
+    AssetIn,
     AssetResponse,
-    AssetUpsertRequest,
     AssetUpsertResponse,
     DashboardResponse,
     MeasurementInsertResponse,
@@ -43,6 +44,12 @@ async def shutdown_event():
 
 
 security = HTTPBearer()
+
+
+async def get_session() -> AsyncSession:
+    """Dependency wrapper for production or test session."""
+    async for session in get_db():
+        yield session
 
 
 async def get_token(
@@ -154,12 +161,13 @@ async def get_measurements(
     description="Creates new assets or updates existing ones. Does not delete any records.",
 )
 async def post_assets(
-    req: AssetUpsertRequest,
+    assets: List[AssetIn] = Body(...),
     token: str = Depends(get_token),
+    session: AsyncSession = Depends(get_session),
 ):
     """Add or update multiple assets without deleting existing ones."""
     validate_token(token)
-    return await upsert_assets(req.assets)
+    return await upsert_assets(session, assets)
 
 
 @app.get(
@@ -171,7 +179,8 @@ async def post_assets(
 async def get_assets(
     asset_uuid: Optional[str] = None,
     token: str = Depends(get_token),
+    session: AsyncSession = Depends(get_session),
 ):
-    """Fetch asset records from the database."""
+    """Get assets from DB."""
     validate_token(token)
-    return await fetch_assets(asset_uuid)
+    return await fetch_assets(session, asset_uuid)

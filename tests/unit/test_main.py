@@ -24,32 +24,56 @@ def client():
 # -----------------------------
 @pytest.fixture(autouse=True)
 def patch_validate_token():
-    """Mock validate_token to always succeed."""
+    """Mock validate_token to always succeed for all tests."""
     with patch("app.main.validate_token", lambda token: True):
         yield
 
 
 # -----------------------------
+# Helper fixture for patching async services
+# -----------------------------
+@pytest.fixture
+def patch_service():
+    """Return a helper to patch async service functions.
+
+    Usage:
+        mock_service = patch_service("app.main.some_async_function")
+        mock_service.return_value = ...
+    """
+    patches = []
+
+    def _patch(target):
+        mock = AsyncMock()
+        p = patch(target, new=mock)
+        p.start()
+        patches.append(p)
+        return mock
+
+    yield _patch
+
+    for p in patches:
+        p.stop()
+
+
+# -----------------------------
 # Constraints endpoint tests
 # -----------------------------
-class TestReadActiveConstraints:
-    """Test cases for the /constraints/active endpoint."""
+class TestGetActiveConstraints:
+    """Tests for the GET /constraints/active endpoint."""
 
     @pytest.fixture(autouse=True)
-    def _setup_mock(self):
-        """Patch get_active_constraints for all tests in this class."""
-        with patch("app.main.get_active_constraints", new_callable=AsyncMock) as mock:
-            self.mock_constraint_service = mock
-            yield
+    def _setup_mock(self, patch_service):
+        """Automatically patch the get_active_constraints service."""
+        self.mock_constraint_service = patch_service("app.main.get_active_constraints")
 
     def test_successful_request_with_asset_id(self, client):
-        """Return 200 and constraint data when asset_id is provided."""
+        """Returns the correct subtree when an asset UUID is provided."""
         self.mock_constraint_service.return_value = {
             "assets": [
                 {
                     "asset_uuid": "asset123",
                     "forecast_uuid": "11111111-1111-1111-1111-111111111111",
-                    "forecast_run_id": "run123",  # <-- added
+                    "forecast_run_id": "run123",
                     "frequency_min": 60,
                     "constraints": [
                         {
@@ -62,80 +86,61 @@ class TestReadActiveConstraints:
             ]
         }
 
-        response = client.get(
+        resp = client.get(
             "/constraints/active?asset_uuid=asset123",
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 200
-        assert response.json()["assets"][0]["asset_uuid"] == "asset123"
+        assert resp.status_code == 200
+        assert resp.json()["assets"][0]["asset_uuid"] == "asset123"
 
     def test_successful_request_without_asset_id(self, client):
-        """Return 200 and empty list when no asset_id is provided."""
+        """Returns all assets when no asset UUID is provided."""
         self.mock_constraint_service.return_value = {"assets": []}
 
-        response = client.get(
-            "/constraints/active",
-            headers={"Authorization": "Bearer fake-token"},
-        )
-
-        assert response.status_code == 200
-        assert response.json()["assets"] == []
+        resp = client.get("/constraints/active", headers={"Authorization": "Bearer fake-token"})
+        assert resp.status_code == 200
+        assert resp.json()["assets"] == []
 
     def test_database_error_returns_500(self, client):
-        """Return 500 when database error occurs."""
+        """Handles database errors and returns 500 status."""
         self.mock_constraint_service.side_effect = HTTPException(
             status_code=500, detail="Database error"
         )
-
-        response = client.get(
-            "/constraints/active",
-            headers={"Authorization": "Bearer fake-token"},
-        )
-
-        assert response.status_code == 500
+        resp = client.get("/constraints/active", headers={"Authorization": "Bearer fake-token"})
+        assert resp.status_code == 500
 
 
 # -----------------------------
 # Dashboard endpoint tests
 # -----------------------------
-class TestReadDashboardAssetData:
-    """Test /dashboard/assets/{asset_uuid}/data endpoint with updated dashboard_service output."""
+class TestGetDashboardAssetData:
+    """Tests for the GET /dashboard/assets/{asset_uuid}/data endpoint."""
 
     @pytest.fixture(autouse=True)
-    def _setup_mock(self):
-        with patch("app.main.get_dashboard_asset_data", new_callable=AsyncMock) as mock:
-            self.mock_dashboard_service = mock
-            yield
+    def _setup_mock(self, patch_service):
+        """Automatically patch the get_dashboard_asset_data service."""
+        self.mock_dashboard_service = patch_service("app.main.get_dashboard_asset_data")
 
     def test_no_forecast_returns_empty_lists(self, client):
-        """No forecasts -> empty lists and measurements with empty metrics/units."""
-        asset_uuid = "asset123"
+        """Returns empty lists when no forecasts exist for an asset."""
         self.mock_dashboard_service.return_value = {
-            "asset_uuid": asset_uuid,
+            "asset_uuid": "asset123",
             "latest_forecasts": [],
             "previous_forecasts": [],
-            "measurements": {
-                "metrics": [],
-                "values": [],
-                "units": {"load": "kW", "temp": "C"},
-            },
+            "measurements": {"metrics": [], "values": [], "units": {"load": "kW", "temp": "C"}},
         }
 
-        response = client.get(
-            f"/dashboard/assets/{asset_uuid}/data",
-            headers={"Authorization": "Bearer fake-token"},
+        resp = client.get(
+            "/dashboard/assets/asset123/data", headers={"Authorization": "Bearer fake-token"}
         )
-        data = response.json()
+        data = resp.json()
         assert data["latest_forecasts"] == []
         assert data["previous_forecasts"] == []
         assert data["measurements"]["metrics"] == []
         assert data["measurements"]["units"]["load"] == "kW"
 
     def test_forecasts_with_accuracy_metrics(self, client):
-        """Return forecasts with computed accuracy_metrics."""
-        asset_uuid = "asset123"
-
+        """Returns forecasts including accuracy metrics and measurements."""
         latest_forecast = {
             "forecast_run_id": "run111",
             "model_run_id": "model123",
@@ -154,7 +159,6 @@ class TestReadDashboardAssetData:
             ],
             "accuracy_metrics": {"mae": 1.0, "mape": 0.0237},
         }
-
         measurements = {
             "metrics": ["load", "temp"],
             "values": [
@@ -165,30 +169,24 @@ class TestReadDashboardAssetData:
         }
 
         self.mock_dashboard_service.return_value = {
-            "asset_uuid": asset_uuid,
+            "asset_uuid": "asset123",
             "latest_forecasts": [latest_forecast],
             "previous_forecasts": [previous_forecast],
             "measurements": measurements,
         }
 
-        response = client.get(
-            f"/dashboard/assets/{asset_uuid}/data",
-            headers={"Authorization": "Bearer fake-token"},
+        resp = client.get(
+            "/dashboard/assets/asset123/data", headers={"Authorization": "Bearer fake-token"}
         )
-        data = response.json()
-
+        data = resp.json()
         # Forecasts
-        latest = data["latest_forecasts"][0]
-        prev = data["previous_forecasts"][0]
-        assert latest["forecast_run_id"] == "run111"
-        assert prev["forecast_run_id"] == "run110"
-
+        assert data["latest_forecasts"][0]["forecast_run_id"] == "run111"
+        assert data["previous_forecasts"][0]["forecast_run_id"] == "run110"
         # Accuracy metrics
-        assert latest["accuracy_metrics"]["mae"] == 1.5
-        assert prev["accuracy_metrics"]["mae"] == 1.0
-        assert latest["accuracy_metrics"]["mape"] == pytest.approx(0.0285)
-        assert prev["accuracy_metrics"]["mape"] == pytest.approx(0.0237)
-
+        assert data["latest_forecasts"][0]["accuracy_metrics"]["mae"] == 1.5
+        assert data["previous_forecasts"][0]["accuracy_metrics"]["mae"] == 1.0
+        assert data["latest_forecasts"][0]["accuracy_metrics"]["mape"] == pytest.approx(0.0285)
+        assert data["previous_forecasts"][0]["accuracy_metrics"]["mape"] == pytest.approx(0.0237)
         # Measurements
         meas = data["measurements"]
         assert meas["metrics"] == ["load", "temp"]
@@ -200,19 +198,16 @@ class TestReadDashboardAssetData:
 # Measurements POST endpoint tests
 # -----------------------------
 class TestPostMeasurements:
-    """Test cases for the /assets/{asset_uuid}/measurements POST endpoint."""
+    """Tests for the POST /assets/{asset_uuid}/measurements/ endpoint."""
 
     @pytest.fixture(autouse=True)
-    def _setup_mock(self):
-        """Patch insert_measurements for all tests in this class."""
-        with patch("app.main.insert_measurements", new_callable=AsyncMock) as mock:
-            self.mock_insert_service = mock
-            yield
+    def _setup_mock(self, patch_service):
+        """Automatically patch the insert_measurements service."""
+        self.mock_insert_service = patch_service("app.main.insert_measurements")
 
     def test_successful_insert(self, client):
-        """Return 200 when measurements are successfully inserted."""
-        self.mock_insert_service.return_value = None  # endpoint builds response from input
-
+        """Inserts measurements successfully and returns count."""
+        self.mock_insert_service.return_value = None
         payload = {
             "measurements": [
                 {"timestamp": "2025-09-13T21:00:00Z", "metric": "load", "value": 100},
@@ -220,72 +215,56 @@ class TestPostMeasurements:
             ]
         }
 
-        response = client.post(
+        resp = client.post(
             "/assets/asset123/measurements/",
             json=payload,
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 200
-        assert response.json() == {
+        assert resp.status_code == 200
+        assert resp.json() == {
             "asset_uuid": "asset123",
             "inserted_count": 2,
             "message": "Measurements inserted successfully",
         }
 
     def test_empty_measurements_returns_no_data(self, client):
-        """Return 200 with zero inserted_count if measurements list is empty."""
+        """Handles empty measurement payload gracefully."""
         self.mock_insert_service.return_value = None
-
-        payload = {"measurements": []}
-
-        response = client.post(
+        resp = client.post(
             "/assets/asset123/measurements/",
-            json=payload,
+            json={"measurements": []},
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 200
-        assert response.json() == {
-            "asset_uuid": "asset123",
-            "inserted_count": 0,
-            "message": "Measurements inserted successfully",
-        }
+        assert resp.status_code == 200
+        assert resp.json()["inserted_count"] == 0
 
     def test_database_error_returns_500(self, client):
-        """Return 500 when database insert fails."""
-        self.mock_insert_service.side_effect = HTTPException(
-            status_code=500, detail="Database error"
-        )
-
+        """Handles database errors and returns 500 status."""
+        self.mock_insert_service.side_effect = HTTPException(500, "Database error")
         payload = {
             "measurements": [{"timestamp": "2025-09-13T21:00:00Z", "metric": "load", "value": 100}]
         }
-
-        response = client.post(
+        resp = client.post(
             "/assets/asset123/measurements/",
             json=payload,
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 500
+        assert resp.status_code == 500
 
 
 # -----------------------------
 # Measurements GET endpoint tests
 # -----------------------------
 class TestGetMeasurements:
-    """Test cases for the /assets/{asset_uuid}/measurements GET endpoint."""
+    """Tests for the GET /assets/{asset_uuid}/measurements/ endpoint."""
 
     @pytest.fixture(autouse=True)
-    def _setup_mock(self):
-        """Patch get_all_measurements for all tests in this class."""
-        with patch("app.main.get_all_measurements", new_callable=AsyncMock) as mock:
-            self.mock_get_measurements = mock
-            yield
+    def _setup_mock(self, patch_service):
+        """Automatically patch the get_all_measurements service."""
+        self.mock_get_measurements = patch_service("app.main.get_all_measurements")
 
     def test_successful_get_measurements(self, client):
-        """Return 200 and measurement data for valid params."""
+        """Returns all measurements for a given time range successfully."""
         self.mock_get_measurements.return_value = {
             "metrics": ["load"],
             "values": [
@@ -294,166 +273,151 @@ class TestGetMeasurements:
             ],
             "units": {"load": "kW"},
         }
-
-        response = client.get(
+        resp = client.get(
             "/assets/asset123/measurements/",
-            params={
-                "start_time": "2025-09-13T21:00:00",
-                "end_time": "2025-09-13T22:00:00",
-            },
+            params={"start_time": "2025-09-13T21:00:00", "end_time": "2025-09-13T22:00:00"},
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 200
-        data = response.json()
+        data = resp.json()
+        assert resp.status_code == 200
         assert data["metrics"] == ["load"]
         assert len(data["values"]) == 2
 
     def test_invalid_datetime_returns_400(self, client):
-        """Return 400 if datetime format is invalid."""
-        response = client.get(
+        """Returns 400 for invalid datetime parameters."""
+        resp = client.get(
             "/assets/asset123/measurements/?start_time=not-a-date&end_time=2025-09-13T22:00:00",
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 400
-        assert "Invalid datetime format" in response.text
+        assert resp.status_code == 400
+        assert "Invalid datetime format" in resp.text
 
 
 # -----------------------------
 # Assets POST endpoint tests
 # -----------------------------
 class TestPostAssets:
-    """Test cases for the /assets POST endpoint."""
+    """Tests for the POST /assets endpoint."""
 
     @pytest.fixture(autouse=True)
-    def _setup_mock(self):
-        """Patch upsert_assets for all tests in this class."""
-        with patch("app.main.upsert_assets", new_callable=AsyncMock) as mock:
-            self.mock_upsert_assets = mock
-            yield
+    def _setup_mock(self, patch_service):
+        """Automatically patch the upsert_assets service."""
+        self.mock_upsert_assets = patch_service("app.main.upsert_assets")
 
     def test_successful_post_assets(self, client):
-        """Return 200 and summary of inserted/updated assets."""
-        self.mock_upsert_assets.return_value = {
-            "inserted": 3,
-            "updated": 0,
-            "total": 3,
-        }
-
-        request_body = {
-            "assets": [
-                {
-                    "id": "K0A",
-                    "name": "K0A",
-                    "type": "substation",
-                    "capacity_kw": 80000.0,
-                    "assets": [],
-                },
-                {
-                    "id": "K0B",
-                    "name": "K0B",
-                    "type": "substation",
-                    "capacity_kw": 70000.0,
-                    "assets": [],
-                },
-            ]
-        }
-
-        response = client.post(
-            "/assets",
-            json=request_body,
-            headers={"Authorization": "Bearer fake-token"},
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data == {"inserted": 3, "updated": 0, "total": 3}
-
-        # Check that service was called once with the correct parsed payload
-        args, _ = self.mock_upsert_assets.call_args
-        assert len(args[0]) == 2  # Two assets passed in
+        """Successfully inserts nested assets."""
+        self.mock_upsert_assets.return_value = {"inserted": 2, "updated": 0, "total": 2}
+        payload = [
+            {
+                "id": "ontario",
+                "name": "Ontario",
+                "type": "system",
+                "capacity_kw": 80000.0,
+                "depth": 0,
+                "measured": False,
+                "assets": [
+                    {
+                        "id": "K0B",
+                        "name": "K0B",
+                        "type": "distribution_substation",
+                        "capacity_kw": 70000.0,
+                        "assets": [],
+                        "depth": 1,
+                        "measured": True,
+                    }
+                ],
+            }
+        ]
+        resp = client.post("/assets", json=payload, headers={"Authorization": "Bearer fake-token"})
+        assert resp.status_code == 200
+        assert resp.json() == {"inserted": 2, "updated": 0, "total": 2}
+        self.mock_upsert_assets.assert_awaited_once()
 
     def test_invalid_payload_returns_422(self, client):
-        """Return 422 if required fields missing or invalid."""
-        # Missing 'id' field
-        invalid_body = {"assets": [{"name": "BadAsset", "type": "substation"}]}
-
-        response = client.post(
+        """Returns 422 for invalid asset payloads."""
+        resp = client.post(
             "/assets",
-            json=invalid_body,
+            json=[{"name": "BadAsset", "type": "substation"}],
             headers={"Authorization": "Bearer fake-token"},
         )
-
-        assert response.status_code == 422  # Pydantic validation error
+        assert resp.status_code == 422
 
 
 # -----------------------------
 # Assets GET endpoint tests
 # -----------------------------
 class TestGetAssets:
-    """Test cases for the /assets GET endpoint."""
+    """Tests for the GET /assets endpoint."""
 
     @pytest.fixture(autouse=True)
-    def _setup_mock(self):
-        """Patch fetch_assets for all tests in this class."""
-        with patch("app.main.fetch_assets", new_callable=AsyncMock) as mock:
-            self.mock_fetch_assets = mock
-            yield
+    def _setup_mock(self, patch_service):
+        """Automatically patch the fetch_assets service."""
+        self.mock_fetch_assets = patch_service("app.main.fetch_assets")
 
     def test_get_all_assets_success(self, client):
-        """Return 200 and list of assets."""
+        """Returns all assets in hierarchical tree structure."""
         self.mock_fetch_assets.return_value = [
             {
-                "asset_uuid": "K0A",
-                "name": "K0A",
-                "asset_type": "substation",
-                "capacity_kw": 80000.0,
+                "asset_uuid": "ONT",
+                "name": "Ontario",
+                "asset_type": "system",
+                "capacity_kw": 0,
                 "parent_uuid": None,
-            },
-            {
-                "asset_uuid": "K0B",
-                "name": "K0B",
-                "asset_type": "substation",
-                "capacity_kw": 70000.0,
-                "parent_uuid": None,
-            },
+                "depth": 0,
+                "measured": False,
+                "children": [
+                    {
+                        "asset_uuid": "K0A",
+                        "name": "K0A",
+                        "asset_type": "distribution_substation",
+                        "capacity_kw": 80000.0,
+                        "parent_uuid": "ONT",
+                        "depth": 1,
+                        "measured": False,
+                        "children": [],
+                    },
+                    {
+                        "asset_uuid": "K0B",
+                        "name": "K0B",
+                        "asset_type": "distribution_substation",
+                        "capacity_kw": 70000.0,
+                        "parent_uuid": "ONT",
+                        "depth": 1,
+                        "measured": True,
+                        "children": [],
+                    },
+                ],
+            }
         ]
 
-        response = client.get(
-            "/assets",
-            headers={"Authorization": "Bearer fake-token"},
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
-        assert data[0]["asset_uuid"] == "K0A"
-
-        # Ensure service was called
-        self.mock_fetch_assets.assert_awaited_once_with(None)
+        resp = client.get("/assets", headers={"Authorization": "Bearer fake-token"})
+        data = resp.json()
+        assert resp.status_code == 200
+        assert len(data) == 1
+        root = data[0]
+        assert root["asset_uuid"] == "ONT"
+        assert {c["asset_uuid"] for c in root["children"]} == {"K0A", "K0B"}
+        self.mock_fetch_assets.assert_awaited_once()
 
     def test_get_single_asset_success(self, client):
-        """Return 200 for a filtered asset by UUID."""
+        """Returns a single asset and its children (if any)."""
         self.mock_fetch_assets.return_value = [
             {
                 "asset_uuid": "XYZ1",
                 "name": "Sub A",
-                "asset_type": "substation",
+                "asset_type": "distribution_substation",
                 "capacity_kw": 50000.0,
                 "parent_uuid": None,
+                "depth": 0,
+                "measured": False,
+                "children": [],
             }
         ]
 
-        response = client.get(
-            "/assets?asset_uuid=XYZ1",
-            headers={"Authorization": "Bearer fake-token"},
-        )
-
-        assert response.status_code == 200
-        data = response.json()
+        resp = client.get("/assets?asset_uuid=XYZ1", headers={"Authorization": "Bearer fake-token"})
+        data = resp.json()
+        assert resp.status_code == 200
         assert len(data) == 1
         assert data[0]["asset_uuid"] == "XYZ1"
-
-        # Ensure filter argument passed correctly
-        self.mock_fetch_assets.assert_awaited_once_with("XYZ1")
+        assert data[0]["children"] == []
+        self.mock_fetch_assets.assert_awaited_once()

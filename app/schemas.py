@@ -11,13 +11,19 @@ from pydantic import BaseModel, Field
 
 
 class AssetResponse(BaseModel):
-    """Schema returned when fetching asset records."""
+    """Schema returned when fetching asset records in a nested hierarchy."""
 
     asset_uuid: str
     name: str
     asset_type: str
     capacity_kw: Optional[float]
     parent_uuid: Optional[str]
+    depth: int
+    measured: bool
+    children: List["AssetResponse"] = []
+
+
+AssetResponse.update_forward_refs()
 
 
 class AssetIn(BaseModel):
@@ -25,15 +31,10 @@ class AssetIn(BaseModel):
 
     id: str = Field(..., example="K0A")
     name: str = Field(..., example="K0A")
-    type: str = Field(..., example="substation")
+    type: str = Field(..., example="distribution_substation")  # TODO: There is a schema for this
     capacity_kw: Optional[float] = Field(None, example=80000.0)
-    assets: List["AssetIn"] = []  # Nested children
-
-
-class AssetUpsertRequest(BaseModel):
-    """Request schema for bulk inserting or updating multiple assets."""
-
-    assets: List[AssetIn]
+    measured: bool = Field(False, example=True)
+    assets: List["AssetIn"] = []
 
 
 class AssetUpsertResponse(BaseModel):

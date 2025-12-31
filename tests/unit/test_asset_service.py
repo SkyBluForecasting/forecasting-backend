@@ -5,141 +5,140 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.asset_service import fetch_assets, upsert_assets
-from app.schemas import AssetResponse
 
 
 class MockAsset:
-    """Simple mock class to simulate AssetIn objects."""
+    """Mock object representing an AssetIn-like input for upsert_assets."""
 
-    def __init__(self, id, name, type, capacity_kw):
-        """Initialize with a set of keys."""
+    def __init__(self, id, name, type, capacity_kw, measured=False, assets=None):
+        """
+        Initialize a mock asset.
+
+        Args:
+            id (str): Unique identifier for the asset.
+            name (str): Name of the asset.
+            type (str): Asset type (e.g., "system", "distribution_substation").
+            capacity_kw (float): Asset capacity in kW.
+            measured (bool, optional): Whether the asset is measured. Defaults to False.
+            assets (List[MockAsset], optional): Nested child assets. Defaults to empty list.
+        """
         self.id = id
         self.name = name
         self.type = type
         self.capacity_kw = capacity_kw
+        self.measured = measured
+        self.assets = assets or []
+
+
+class MockAssetRow:
+    """Mock database row object representing a persisted Asset."""
+
+    def __init__(self, asset_uuid, name, asset_type, capacity_kw, parent_uuid, depth, measured):
+        """
+        Initialize a mock database asset row.
+
+        Args:
+            asset_uuid (str): Unique identifier of the asset.
+            name (str): Asset name.
+            asset_type (str): Type of asset.
+            capacity_kw (float): Capacity in kW.
+            parent_uuid (str | None): UUID of the parent asset, if any.
+            depth (int): Depth of the asset in hierarchy.
+            measured (bool): Whether the asset is measured.
+        """
+        self.asset_uuid = asset_uuid
+        self.name = name
+        self.asset_type = asset_type
+        self.capacity_kw = capacity_kw
+        self.parent_uuid = parent_uuid
+        self.depth = depth
+        self.measured = measured
+
+
+def make_mock_session(rows):
+    """Create an AsyncMock session that returns given rows on execute.
+
+    Args:
+        rows (List[MockAssetRow | str]): Rows to return when the session executes a query.
+
+    Returns:
+        AsyncMock: Mock AsyncSession with execute() returning the provided rows.
+    """
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = rows
+    mock_session.execute.return_value = mock_result
+    return mock_session
 
 
 @pytest.mark.asyncio
-async def test_upsert_assets_executes_insert_and_commit(monkeypatch):
-    """Test that upsert_assets executes the insert and commits successfully."""
-    mock_assets = [
-        MockAsset("uuid1", "Solar Farm", "solar", 500),
-        MockAsset("uuid2", "Battery", "battery", 200),
+async def test_upsert_assets_inserts_all_new():
+    """Test upserting assets inserts all records when none exist in DB."""
+    assets = [
+        MockAsset(
+            "uuid1",
+            "System",
+            "system",
+            0,
+            assets=[
+                MockAsset("uuid2", "Sub A", "distribution_substation", 100),
+                MockAsset("uuid3", "Sub B", "distribution_substation", 200),
+            ],
+        )
     ]
-
-    # Mock session context manager
-    mock_session = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.rowcount = 2
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
-    monkeypatch.setattr("app.asset_service.AsyncSessionLocal", lambda: mock_session)
-
-    # Call the service
-    result = await upsert_assets(mock_assets)
-
-    # Assert the session was used correctly
-    mock_session.__aenter__.return_value.execute.assert_awaited_once()
-    mock_session.__aenter__.return_value.commit.assert_awaited_once()
-    assert result == {"inserted": 2, "updated": 0, "total": 2}
+    session = make_mock_session([])
+    result = await upsert_assets(session, assets)
+    assert result == {"inserted": 3, "updated": 0, "total": 3}
+    session.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_upsert_assets_handles_empty_input(monkeypatch):
-    """Test that upsert_assets still runs but inserts 0 assets when given empty input."""
-    mock_session = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.rowcount = 0
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
-    monkeypatch.setattr("app.asset_service.AsyncSessionLocal", lambda: mock_session)
+async def test_upsert_assets_mixed_insert_update():
+    """Test upserting assets inserts new and updates existing ones."""
+    assets = [
+        MockAsset("uuid1", "Root", "system", 0),
+        MockAsset("uuid2", "Child", "distribution_substation", 100),
+    ]
+    session = make_mock_session(["uuid1"])
+    result = await upsert_assets(session, assets)
+    assert result == {"inserted": 1, "updated": 1, "total": 2}
+    session.commit.assert_awaited_once()
 
-    result = await upsert_assets([])
 
-    mock_session.__aenter__.return_value.execute.assert_awaited_once()
-    mock_session.__aenter__.return_value.commit.assert_awaited_once()
+@pytest.mark.asyncio
+async def test_upsert_assets_empty_input():
+    """Test upserting an empty asset list returns zero counts."""
+    session = make_mock_session([])
+    result = await upsert_assets(session, [])
     assert result == {"inserted": 0, "updated": 0, "total": 0}
+    assert session.execute.await_count == 2
+    session.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_upsert_assets_logs_info(monkeypatch, caplog):
-    """Test that upsert_assets logs info about upserted assets."""
-    mock_assets = [MockAsset("uuid1", "Solar", "solar", 100)]
-
-    mock_session = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.rowcount = 1
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
-    monkeypatch.setattr("app.asset_service.AsyncSessionLocal", lambda: mock_session)
-
-    caplog.set_level("INFO")  # Ensure INFO logs are captured
-    result = await upsert_assets(mock_assets)
-
-    assert any("Upserted 1 assets" in msg for msg in caplog.messages), caplog.messages
-    assert result == {"inserted": 1, "updated": 0, "total": 1}
+async def test_fetch_assets_returns_tree():
+    """Test fetch_assets returns a nested hierarchical tree of assets."""
+    rows = [
+        MockAssetRow("uuid1", "System", "system", 0, None, 0, False),
+        MockAssetRow("uuid2", "Sub A", "distribution_substation", 100, "uuid1", 1, False),
+        MockAssetRow("uuid3", "Sub B", "distribution_substation", 200, "uuid1", 1, True),
+    ]
+    session = make_mock_session(rows)
+    result = await fetch_assets(session)
+    root = result[0]
+    assert root["asset_uuid"] == "uuid1"
+    assert {c["asset_uuid"] for c in root["children"]} == {"uuid2", "uuid3"}
 
 
 @pytest.mark.asyncio
-async def test_fetch_assets_returns_all(monkeypatch):
-    """Test that fetch_assets returns all assets when no asset_uuid is given."""
-    # Create mock rows returned from DB
-    mock_asset1 = AssetResponse(
-        asset_uuid="uuid1",
-        name="Solar Farm",
-        asset_type="solar",
-        capacity_kw=500,
-        parent_uuid=None,
-    )
-    mock_asset2 = AssetResponse(
-        asset_uuid="uuid2",
-        name="Battery",
-        asset_type="battery",
-        capacity_kw=200,
-        parent_uuid=None,
-    )
-
-    mock_session = AsyncMock()
-    mock_result = MagicMock()
-
-    # scalars().all() → returns list of ORM objects
-    mock_result.scalars.return_value.all.return_value = [mock_asset1, mock_asset2]
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
-
-    monkeypatch.setattr("app.asset_service.AsyncSessionLocal", lambda: mock_session)
-
-    result = await fetch_assets()
-
-    assert len(result) == 2
-    assert result[0]["asset_uuid"] == "uuid1"
-    assert result[1]["asset_uuid"] == "uuid2"
-
-    mock_session.__aenter__.return_value.execute.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_fetch_assets_filters_by_uuid(monkeypatch):
-    """Test that fetch_assets filters the query when asset_uuid is provided."""
-    mock_asset = AssetResponse(
-        asset_uuid="uuid123",
-        name="Substation A",
-        asset_type="substation",
-        capacity_kw=80000,
-        parent_uuid=None,
-    )
-
-    mock_session = AsyncMock()
-    mock_result = MagicMock()
-
-    # scalars().all() should return a 1-item list
-    mock_result.scalars.return_value.all.return_value = [mock_asset]
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
-
-    monkeypatch.setattr("app.asset_service.AsyncSessionLocal", lambda: mock_session)
-
-    result = await fetch_assets("uuid123")
-
-    # Validate result
-    assert len(result) == 1
-    assert result[0]["asset_uuid"] == "uuid123"
-    assert result[0]["name"] == "Substation A"
-
-    # Assert the query executed
-    mock_session.__aenter__.return_value.execute.assert_awaited_once()
+async def test_fetch_assets_filters_by_uuid():
+    """Test fetch_assets returns subtree when filtered by a specific asset UUID."""
+    rows = [
+        MockAssetRow("uuid1", "Root", "system", 0, None, 0, False),
+        MockAssetRow("uuid2", "Child", "distribution_substation", 100, "uuid1", 1, False),
+    ]
+    session = make_mock_session(rows)
+    result = await fetch_assets(session, "uuid1")
+    root = result[0]
+    assert root["asset_uuid"] == "uuid1"
+    assert root["children"][0]["asset_uuid"] == "uuid2"
