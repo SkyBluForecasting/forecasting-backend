@@ -20,7 +20,7 @@ def test_asset_in_rejects_extra_fields():
         AssetIn(**payload)
 
     errors = exc.value.errors()
-    assert errors[0]["type"] == "value_error.extra"
+    assert errors[0]["type"] == "extra_forbidden"
     assert errors[0]["loc"] == ("capacity_kW",)
 
 
