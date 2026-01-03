@@ -1,4 +1,5 @@
 # Packages
+pydantic==2.12.2
 fastapi
 uvicorn
 sqlalchemy

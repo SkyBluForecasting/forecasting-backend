@@ -313,7 +313,6 @@ class TestPostAssets:
                 "name": "Ontario",
                 "type": "system",
                 "capacity_kw": 80000.0,
-                "depth": 0,
                 "measured": False,
                 "assets": [
                     {
@@ -322,7 +321,6 @@ class TestPostAssets:
                         "type": "distribution_substation",
                         "capacity_kw": 70000.0,
                         "assets": [],
-                        "depth": 1,
                         "measured": True,
                     }
                 ],

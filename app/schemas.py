@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from forecasting_db.models import AssetType
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================================
 # 🟦 Asset Schemas
@@ -21,10 +21,10 @@ class AssetResponse(BaseModel):
     parent_uuid: Optional[str]
     depth: int
     measured: bool
-    children: List["AssetResponse"] = []
+    children: List["AssetResponse"] = Field(default_factory=list)
 
 
-AssetResponse.update_forward_refs()
+AssetResponse.model_rebuild()
 
 
 class AssetIn(BaseModel):
@@ -35,7 +35,9 @@ class AssetIn(BaseModel):
     type: AssetType = Field(..., example="distribution_substation")
     capacity_kw: Optional[float] = Field(None, example=80000.0)
     measured: bool = Field(False, example=True)
-    assets: List["AssetIn"] = []
+    assets: List["AssetIn"] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AssetUpsertResponse(BaseModel):
