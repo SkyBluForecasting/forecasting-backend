@@ -21,7 +21,7 @@ class AssetResponse(BaseModel):
     parent_uuid: Optional[str]
     depth: int
     measured: bool
-    children: List["AssetResponse"] = []
+    children: List["AssetResponse"] = Field(default_factory=list)
 
 
 AssetResponse.update_forward_refs()
@@ -35,7 +35,12 @@ class AssetIn(BaseModel):
     type: AssetType = Field(..., example="distribution_substation")
     capacity_kw: Optional[float] = Field(None, example=80000.0)
     measured: bool = Field(False, example=True)
-    assets: List["AssetIn"] = []
+    assets: List["AssetIn"] = Field(default_factory=list)
+
+    class Config:
+        """Pydantic configuration for the schema."""
+
+        extra = "forbid"
 
 
 class AssetUpsertResponse(BaseModel):
