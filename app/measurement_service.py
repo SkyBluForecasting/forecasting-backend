@@ -8,8 +8,8 @@ from typing import Dict, List
 from forecasting_db.models import Forecast, ForecastError, ForecastRun, Measurement
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .db_client import AsyncSessionLocal
 from .db_utils import to_utc, to_utc_iso
 
 logger = logging.getLogger(__name__)
@@ -22,64 +22,78 @@ METRIC_UNITS = {
 CHUNK_SIZE = 200  # safe default
 
 
-async def insert_measurements(asset_uuid: str, measurements: list) -> dict:
+async def insert_measurements(
+    session: AsyncSession,
+    asset_uuid: str,
+    measurements: list,
+) -> dict:
     """Insert measurements (and resulting forecast errors) into the DB."""
     if not measurements:
         return {"status": "no data provided"}
 
-    async with AsyncSessionLocal() as session:
-        total_inserted = 0
+    total_inserted = 0
+    all_unique_rows: list[dict] = []
 
-        for i in range(0, len(measurements), CHUNK_SIZE):
-            chunk = measurements[i : i + CHUNK_SIZE]
+    for i in range(0, len(measurements), CHUNK_SIZE):
+        chunk = measurements[i : i + CHUNK_SIZE]
 
-            # Deduplicate within this chunk by (asset_uuid, timestamp, metric)
-            unique_rows = {}
-            for m in chunk:
-                key = (asset_uuid, to_utc(m["timestamp"]), m["metric"])
-                unique_rows[key] = {
-                    "asset_uuid": asset_uuid,
-                    "timestamp": to_utc(m["timestamp"]),
-                    "metric": m["metric"],
-                    "value": m["value"],
-                }
+        # Deduplicate within this chunk by (asset_uuid, timestamp, metric)
+        unique_rows: dict[tuple, dict] = {}
+        for m in chunk:
+            ts_utc = to_utc(m["timestamp"])
+            key = (asset_uuid, ts_utc, m["metric"])
+            unique_rows[key] = {
+                "asset_uuid": asset_uuid,
+                "timestamp": ts_utc,
+                "metric": m["metric"],
+                "value": m["value"],
+            }
 
-            rows = list(unique_rows.values())
+        rows = list(unique_rows.values())
+        if not rows:
+            continue
 
-            stmt = pg_insert(Measurement).values(rows)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["asset_uuid", "timestamp", "metric"],
-                set_={"value": stmt.excluded.value},
-            )
-
-            await session.execute(stmt)
-            total_inserted += len(rows)
-
-        await session.commit()
-        await _insert_forecast_errors_for_new_measurements(
-            session, asset_uuid, list(unique_rows.values())
+        stmt = pg_insert(Measurement).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["asset_uuid", "timestamp", "metric"],
+            set_={"value": stmt.excluded.value},
         )
+
+        await session.execute(stmt)
+        total_inserted += len(rows)
+        all_unique_rows.extend(rows)
+
+    # Persist measurements first
+    await session.commit()
+
+    # Then compute/insert forecast errors based on the measurements inserted/updated
+    if all_unique_rows:
+        await _insert_forecast_errors_for_new_measurements(session, asset_uuid, all_unique_rows)
 
     return {"status": "success", "inserted": total_inserted}
 
 
-async def get_all_measurements(asset_uuid: str, start_time: datetime, end_time: datetime) -> Dict:
+async def get_all_measurements(
+    session: AsyncSession,
+    asset_uuid: str,
+    start_time: datetime,
+    end_time: datetime,
+) -> Dict:
     """Return all measurements grouped by timestamp with all metrics."""
-    async with AsyncSessionLocal() as session:
-        start_time_utc = to_utc(start_time)
-        end_time_utc = to_utc(end_time)
+    start_time_utc = to_utc(start_time)
+    end_time_utc = to_utc(end_time)
 
-        q = (
-            select(Measurement.timestamp, Measurement.metric, Measurement.value)
-            .where(
-                (Measurement.asset_uuid == asset_uuid)
-                & (Measurement.timestamp >= start_time_utc)
-                & (Measurement.timestamp <= end_time_utc)
-            )
-            .order_by(Measurement.timestamp)
+    q = (
+        select(Measurement.timestamp, Measurement.metric, Measurement.value)
+        .where(
+            (Measurement.asset_uuid == asset_uuid)
+            & (Measurement.timestamp >= start_time_utc)
+            & (Measurement.timestamp <= end_time_utc)
         )
-        result = await session.execute(q)
-        rows = result.mappings().all()
+        .order_by(Measurement.timestamp)
+    )
+    result = await session.execute(q)
+    rows = result.mappings().all()
 
     if not rows:
         return {"metrics": [], "values": [], "units": {}}

@@ -1,7 +1,7 @@
 """Unit tests for forecast_errors_service.py."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -17,12 +17,10 @@ async def test_get_forecast_errors_empty():
     mock_result.mappings.return_value.all.return_value = []
 
     # Mock the async session
-    mock_session = AsyncMock()
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
+    session = AsyncMock()
+    session.execute.return_value = mock_result
 
-    with patch("app.forecast_errors_service.AsyncSessionLocal", return_value=mock_session):
-        result = await get_forecast_errors("run123")
-
+    result = await get_forecast_errors(session, "run123")
     assert result == {}
 
 
@@ -35,12 +33,10 @@ async def test_get_forecast_errors_single_row():
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = rows
 
-    mock_session = AsyncMock()
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
+    session = AsyncMock()
+    session.execute.return_value = mock_result
 
-    with patch("app.forecast_errors_service.AsyncSessionLocal", return_value=mock_session):
-        result = await get_forecast_errors("run123")
-
+    result = await get_forecast_errors(session, "run123")
     assert result == {to_utc_iso(dt): 3.5}
 
 
@@ -57,11 +53,10 @@ async def test_get_forecast_errors_multiple_rows():
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = rows
 
-    mock_session = AsyncMock()
-    mock_session.__aenter__.return_value.execute.return_value = mock_result
+    session = AsyncMock()
+    session.execute.return_value = mock_result
 
-    with patch("app.forecast_errors_service.AsyncSessionLocal", return_value=mock_session):
-        result = await get_forecast_errors("run456")
+    result = await get_forecast_errors(session, "run456")
 
     expected = {
         to_utc_iso(dt1): 1.0,
