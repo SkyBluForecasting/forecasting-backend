@@ -1,5 +1,7 @@
 """Functions for pulling and parsing data to display in dashboard."""
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .db_utils import to_utc_iso
 from .forecast_errors_service import get_forecast_errors
 from .forecast_service import get_forecast_rows, get_recent_forecasts
@@ -8,7 +10,6 @@ from .measurement_service import METRIC_UNITS, get_all_measurements
 
 def compute_error_metrics(measurements, errors):
     """Compute MAE and MAPE for a forecast run."""
-    # Create a map of load measurement per timestamp. E.g., {timestamp: load measurement}
     actual_map = {
         m["timestamp"]: m["values"]["load"]
         for m in measurements["values"]
@@ -31,10 +32,10 @@ def compute_error_metrics(measurements, errors):
     return {"mae": mae, "mape": mape}
 
 
-async def get_dashboard_asset_data(asset_uuid: str):
+async def get_dashboard_asset_data(session: AsyncSession, asset_uuid: str):
     """Fetch dashboard data for an asset, including latest two forecasts and measurements."""
     # Get last two forecasts
-    forecasts = await get_recent_forecasts(asset_uuid, limit=2)
+    forecasts = await get_recent_forecasts(session, asset_uuid, limit=2)
     if not forecasts:
         return {
             "asset_uuid": asset_uuid,
@@ -43,14 +44,15 @@ async def get_dashboard_asset_data(asset_uuid: str):
             "measurements": None,
         }
 
-    # The latest one is active, second is inactive
     latest_forecast = forecasts[0]
     second_forecast = forecasts[1] if len(forecasts) > 1 else None
 
     # Fetch values for both
-    latest_values = await get_forecast_rows(latest_forecast["forecast_run_id"])
+    latest_values = await get_forecast_rows(session, latest_forecast["forecast_run_id"])
     inactive_values = (
-        await get_forecast_rows(second_forecast["forecast_run_id"]) if second_forecast else []
+        await get_forecast_rows(session, second_forecast["forecast_run_id"])
+        if second_forecast
+        else []
     )
 
     # Determine overall time range for measurements
@@ -67,7 +69,7 @@ async def get_dashboard_asset_data(asset_uuid: str):
 
     # Fetch measurements
     if start_time and end_time:
-        measurements = await get_all_measurements(asset_uuid, start_time, end_time)
+        measurements = await get_all_measurements(session, asset_uuid, start_time, end_time)
     else:
         measurements = {
             "metrics": [],
@@ -76,8 +78,8 @@ async def get_dashboard_asset_data(asset_uuid: str):
         }
 
     async def format_forecast(run):
-        values = await get_forecast_rows(run["forecast_run_id"])
-        errors = await get_forecast_errors(run["forecast_run_id"])
+        values = await get_forecast_rows(session, run["forecast_run_id"])
+        errors = await get_forecast_errors(session, run["forecast_run_id"])
         metrics = compute_error_metrics(measurements, errors)
 
         return {

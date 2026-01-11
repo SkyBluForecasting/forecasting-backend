@@ -102,10 +102,11 @@ async def read_active_constraints(
 async def read_dashboard_asset_data(
     asset_uuid: str,
     token: str = Depends(get_token),
+    session: AsyncSession = Depends(get_session),
 ):
     """Fetch forecast and measurement dashboard data for a specific asset."""
     validate_token(token)
-    return await get_dashboard_asset_data(asset_uuid)
+    return await get_dashboard_asset_data(session, asset_uuid)
 
 
 @app.post(
@@ -140,6 +141,7 @@ async def get_measurements(
     start_time: str,
     end_time: str,
     token: str = Depends(get_token),
+    session: AsyncSession = Depends(get_session),
 ):
     """Retrieve measurements for an asset."""
     validate_token(token)
@@ -150,7 +152,7 @@ async def get_measurements(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid datetime format, use ISO format")
 
-    measurements = await get_all_measurements(asset_uuid, start_dt, end_dt)
+    measurements = await get_all_measurements(session, asset_uuid, start_dt, end_dt)
     return measurements
 
 

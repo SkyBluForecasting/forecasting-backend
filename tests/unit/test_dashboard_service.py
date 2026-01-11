@@ -65,11 +65,13 @@ def test_compute_error_metrics_all_cases(measurements, errors, expected_mae, exp
 @pytest.mark.asyncio
 async def test_dashboard_no_forecast():
     """No forecasts exist → empty lists and measurements None."""
+    session = AsyncMock()
+
     with patch(
         "app.dashboard_service.get_recent_forecasts", new_callable=AsyncMock
     ) as mock_forecasts:
         mock_forecasts.return_value = []
-        result = await get_dashboard_asset_data("asset123")
+        result = await get_dashboard_asset_data(session, "asset123")
 
     assert result["asset_uuid"] == "asset123"
     assert result["latest_forecasts"] == []
@@ -79,7 +81,9 @@ async def test_dashboard_no_forecast():
 
 @pytest.mark.asyncio
 async def test_dashboard_forecast_no_rows():
-    """Forecasts exist but no forecast rows → measurements still include units."""
+    """Forecasts exist but no forecast rows → measurements uses empty default (units present)."""
+    session = AsyncMock()
+
     latest_forecast = {
         "forecast_run_id": "run111",
         "model_run_id": "model123",
@@ -96,21 +100,18 @@ async def test_dashboard_forecast_no_rows():
     ) as mock_forecasts, patch(
         "app.dashboard_service.get_forecast_rows", new_callable=AsyncMock
     ) as mock_rows, patch(
-        "app.dashboard_service.get_all_measurements", new_callable=AsyncMock
-    ) as mock_meas, patch(
         "app.dashboard_service.get_forecast_errors", new_callable=AsyncMock
-    ) as mock_errors:
+    ) as mock_errors, patch(
+        "app.dashboard_service.get_all_measurements", new_callable=AsyncMock
+    ) as mock_meas:
 
         mock_forecasts.return_value = [latest_forecast, second_forecast]
-        mock_rows.return_value = []
-        mock_meas.return_value = {
-            "metrics": ["load", "temp"],
-            "values": [],
-            "units": {"load": "kW", "temp": "C"},
-        }
-        mock_errors.return_value = {}
+        mock_rows.return_value = []  # no rows for any run
+        mock_errors.return_value = {}  # no errors
+        # NOTE: get_all_measurements should NOT be called because no start/end
+        mock_meas.return_value = {"metrics": ["load"], "values": [], "units": {"load": "kW"}}
 
-        result = await get_dashboard_asset_data("asset123")
+        result = await get_dashboard_asset_data(session, "asset123")
 
     # Forecast structure
     latest = result["latest_forecasts"][0]
@@ -124,17 +125,22 @@ async def test_dashboard_forecast_no_rows():
     assert latest["accuracy_metrics"]["mae"] is None
     assert latest["accuracy_metrics"]["mape"] is None
 
-    # Measurements
+    # Measurements: default empty (since no time range)
     meas = result["measurements"]
     assert meas["metrics"] == []
     assert meas["values"] == []
     assert meas["units"]["load"] == "kW"
     assert meas["units"]["temp"] == "C"
 
+    # And ensure we didn't call get_all_measurements
+    mock_meas.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_dashboard_forecast_with_rows_and_measurements():
     """Full flow: two forecasts with rows, measurements, and errors."""
+    session = AsyncMock()
+
     latest_forecast = {
         "forecast_run_id": "run111",
         "model_run_id": "model123",
@@ -175,13 +181,13 @@ async def test_dashboard_forecast_with_rows_and_measurements():
         "2025-09-12T22:00:00Z": 0,
     }
 
-    async def mock_rows(run_id):
+    async def mock_rows(_session, run_id):
         return forecast_rows_latest if run_id == "run111" else forecast_rows_second
 
-    async def mock_errors(run_id):
+    async def mock_errors(_session, run_id):
         return errors_latest if run_id == "run111" else errors_prev
 
-    async def mock_measurements(asset_uuid, start_time, end_time):
+    async def mock_measurements(_session, asset_uuid, start_time, end_time):
         return measurements
 
     with patch(
@@ -195,7 +201,7 @@ async def test_dashboard_forecast_with_rows_and_measurements():
     ):
 
         mock_forecasts.return_value = [latest_forecast, second_forecast]
-        result = await get_dashboard_asset_data("asset123")
+        result = await get_dashboard_asset_data(session, "asset123")
 
     latest = result["latest_forecasts"][0]
     prev = result["previous_forecasts"][0]

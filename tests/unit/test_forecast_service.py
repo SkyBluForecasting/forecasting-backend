@@ -1,11 +1,11 @@
 """Unit tests for forecast_service.py."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.forecast_service import get_active_forecast, get_forecast_rows
+from app.forecast_service import get_active_forecast, get_forecast_rows, get_recent_forecasts
 
 
 @pytest.mark.asyncio
@@ -27,11 +27,10 @@ class TestGetActiveForecast:
         mock_result = MagicMock()
         mock_result.mappings.return_value.first.return_value = mock_row
 
-        async_mock_session = AsyncMock()
-        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+        session = AsyncMock()
+        session.execute.return_value = mock_result
 
-        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            result = await get_active_forecast("asset123")
+        result = await get_active_forecast(session, "asset123")
 
         assert result["forecast_run_id"] == "run111"
         assert result["model_run_id"] == "model123"
@@ -42,12 +41,10 @@ class TestGetActiveForecast:
         mock_result = MagicMock()
         mock_result.mappings.return_value.first.return_value = None
 
-        async_mock_session = AsyncMock()
-        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+        session = AsyncMock()
+        session.execute.return_value = mock_result
 
-        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            result = await get_active_forecast("asset123")
-
+        result = await get_active_forecast(session, "asset123")
         assert result is None
 
 
@@ -71,11 +68,10 @@ class TestGetForecastRows:
         mock_result = MagicMock()
         mock_result.mappings.return_value.all.return_value = mock_rows
 
-        async_mock_session = AsyncMock()
-        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+        session = AsyncMock()
+        session.execute.return_value = mock_result
 
-        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            result = await get_forecast_rows("run111")
+        result = await get_forecast_rows(session, "run111")
 
         assert len(result) == 2
         assert result[0]["timestamp"].hour == 12
@@ -88,12 +84,10 @@ class TestGetForecastRows:
         mock_result = MagicMock()
         mock_result.mappings.return_value.all.return_value = []
 
-        async_mock_session = AsyncMock()
-        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+        session = AsyncMock()
+        session.execute.return_value = mock_result
 
-        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            result = await get_forecast_rows("run111")
-
+        result = await get_forecast_rows(session, "run111")
         assert result == []
 
 
@@ -111,13 +105,10 @@ class TestGetRecentForecasts:
         mock_result = MagicMock()
         mock_result.mappings.return_value.all.return_value = mock_forecasts
 
-        async_mock_session = AsyncMock()
-        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+        session = AsyncMock()
+        session.execute.return_value = mock_result
 
-        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            from app.forecast_service import get_recent_forecasts
-
-            result = await get_recent_forecasts("asset123", limit=2)
+        result = await get_recent_forecasts(session, "asset123", limit=2)
 
         assert len(result) == 2
         assert result[0]["forecast_run_id"] == "run2"
@@ -128,12 +119,8 @@ class TestGetRecentForecasts:
         mock_result = MagicMock()
         mock_result.mappings.return_value.all.return_value = []
 
-        async_mock_session = AsyncMock()
-        async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+        session = AsyncMock()
+        session.execute.return_value = mock_result
 
-        with patch("app.forecast_service.AsyncSessionLocal", return_value=async_mock_session):
-            from app.forecast_service import get_recent_forecasts
-
-            result = await get_recent_forecasts("asset123", limit=2)
-
+        result = await get_recent_forecasts(session, "asset123", limit=2)
         assert result == []

@@ -18,13 +18,12 @@ from app.measurement_service import (
 
 
 @pytest.fixture
-def async_session_mock():
-    """Mock for AsyncSessionLocal context manager."""
-    session = AsyncMock()
-    mock_context = session.__aenter__.return_value
-    mock_context.execute = AsyncMock()
-    mock_context.commit = AsyncMock()
-    return session
+def session():
+    """Async Session mock."""
+    s = AsyncMock()
+    s.execute = AsyncMock()
+    s.commit = AsyncMock()
+    return s
 
 
 # -----------------------------
@@ -57,11 +56,7 @@ def async_session_mock():
             ["power", "voltage"],
             2,
         ),
-        (
-            [],
-            [],
-            0,
-        ),
+        ([], [], 0),
         (
             [
                 {
@@ -75,17 +70,17 @@ def async_session_mock():
         ),
     ],
 )
-async def test_get_all_measurements_formats(mock_rows, expected_metrics, expected_values_len):
+async def test_get_all_measurements_formats(
+    session, mock_rows, expected_metrics, expected_values_len
+):
     """Test measurements grouping and units handling."""
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = mock_rows
-    async_mock_session = AsyncMock()
-    async_mock_session.__aenter__.return_value.execute.return_value = mock_result
+    session.execute.return_value = mock_result
 
-    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_mock_session), patch(
-        "app.measurement_service.METRIC_UNITS", {"power": "kW", "voltage": "V"}
-    ):
+    with patch("app.measurement_service.METRIC_UNITS", {"power": "kW", "voltage": "V"}):
         result = await get_all_measurements(
+            session,
             "asset123",
             datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc),
             datetime(2025, 10, 7, 14, 0, tzinfo=timezone.utc),
@@ -102,7 +97,7 @@ async def test_get_all_measurements_formats(mock_rows, expected_metrics, expecte
 
 
 @pytest.mark.asyncio
-async def test_insert_measurements(async_session_mock):
+async def test_insert_measurements(session):
     """Test insert_measurements inserts and commits."""
     test_rows = [
         {
@@ -117,33 +112,40 @@ async def test_insert_measurements(async_session_mock):
         },
     ]
 
-    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_session_mock):
-        result = await insert_measurements("asset123", test_rows)
+    # insert_measurements calls _insert_forecast_errors_for_new_measurements internally
+    with patch(
+        "app.measurement_service._insert_forecast_errors_for_new_measurements",
+        new_callable=AsyncMock,
+    ) as mock_insert_errors:
+        result = await insert_measurements(session, "asset123", test_rows)
 
     assert result["status"] == "success"
     assert result["inserted"] == 2
-    mock_context = async_session_mock.__aenter__.return_value
-    mock_context.execute.assert_called()
-    mock_context.commit.assert_called()
+    session.execute.assert_awaited()
+    session.commit.assert_awaited()
+    mock_insert_errors.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_insert_measurements_no_data():
+async def test_insert_measurements_no_data(session):
     """Test early return when input is empty."""
-    result = await insert_measurements("asset123", [])
+    result = await insert_measurements(session, "asset123", [])
     assert result == {"status": "no data provided"}
 
 
 @pytest.mark.asyncio
-async def test_insert_measurements_upsert(async_session_mock):
+async def test_insert_measurements_upsert(session):
     """Test that duplicates upsert rather than fail."""
     ts = datetime(2025, 10, 7, 12, 0, tzinfo=timezone.utc)
     initial_rows = [{"timestamp": ts, "metric": "power", "value": 100.0}]
     updated_rows = [{"timestamp": ts, "metric": "power", "value": 101.0}]
 
-    with patch("app.measurement_service.AsyncSessionLocal", return_value=async_session_mock):
-        result1 = await insert_measurements("asset123", initial_rows)
-        result2 = await insert_measurements("asset123", updated_rows)
+    with patch(
+        "app.measurement_service._insert_forecast_errors_for_new_measurements",
+        new_callable=AsyncMock,
+    ):
+        result1 = await insert_measurements(session, "asset123", initial_rows)
+        result2 = await insert_measurements(session, "asset123", updated_rows)
 
     assert result1["inserted"] == 1
     assert result2["inserted"] == 1
@@ -179,16 +181,14 @@ def test_compute_forecast_errors_basic():
 
 
 @pytest.mark.asyncio
-async def test_insert_forecast_errors_inserts_when_load_present(async_session_mock):
+async def test_insert_forecast_errors_inserts_when_load_present(session):
     """Insert forecast errors when forecasts and load measurements exist."""
-    mock_context = async_session_mock.__aenter__.return_value
-
-    # mock `await session.execute(q)` result
+    # mock `await session.execute(q)` result for forecast lookup
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = [
         {"timestamp": datetime(2025, 10, 7, 12, 0), "forecast_run_id": 1, "forecast_value": 100},
     ]
-    mock_context.execute = AsyncMock(return_value=mock_result)
+    session.execute.return_value = mock_result
 
     with patch("app.measurement_service._compute_forecast_errors") as mock_compute:
         mock_compute.return_value = [
@@ -196,47 +196,42 @@ async def test_insert_forecast_errors_inserts_when_load_present(async_session_mo
         ]
 
         measurements = [{"timestamp": datetime(2025, 10, 7, 12, 0), "metric": "load", "value": 95}]
+        await _insert_forecast_errors_for_new_measurements(session, "asset123", measurements)
 
-        await _insert_forecast_errors_for_new_measurements(mock_context, "asset123", measurements)
-
-    # Verify forecast query + insert executed
-    assert mock_context.execute.await_count >= 2
-    mock_context.commit.assert_awaited_once()
+    # We should have executed at least:
+    # 1) forecast query
+    # 2) insert stmt for errors (unless your implementation uses executemany etc.)
+    assert session.execute.await_count >= 2
+    session.commit.assert_awaited_once()
     mock_compute.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_insert_forecast_errors_no_forecasts_found(async_session_mock):
+async def test_insert_forecast_errors_no_forecasts_found(session):
     """If no forecasts overlap timestamps, function returns early."""
-    mock_context = async_session_mock.__aenter__.return_value
-
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = []
-    mock_context.execute = AsyncMock(return_value=mock_result)
+    session.execute.return_value = mock_result
 
     measurements = [{"timestamp": datetime(2025, 10, 7, 12, 0), "metric": "load", "value": 95}]
 
-    await _insert_forecast_errors_for_new_measurements(mock_context, "asset123", measurements)
+    await _insert_forecast_errors_for_new_measurements(session, "asset123", measurements)
 
-    # no insert calls, no commits
-    mock_context.commit.assert_not_awaited()
+    # only forecast query, no commits
+    session.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_insert_forecast_errors_no_matching_timestamps(async_session_mock):
+async def test_insert_forecast_errors_no_matching_timestamps(session):
     """If forecasts exist but compute returns no errors, skip insert."""
-    mock_context = async_session_mock.__aenter__.return_value
-
     mock_result = MagicMock()
     mock_result.mappings.return_value.all.return_value = [
         {"timestamp": datetime(2025, 10, 7, 12, 0), "forecast_run_id": 1, "forecast_value": 100},
     ]
-    mock_context.execute = AsyncMock(return_value=mock_result)
+    session.execute.return_value = mock_result
 
     with patch("app.measurement_service._compute_forecast_errors", return_value=[]):
-
         measurements = [{"timestamp": datetime(2025, 10, 7, 12, 0), "metric": "load", "value": 95}]
-        await _insert_forecast_errors_for_new_measurements(mock_context, "asset123", measurements)
+        await _insert_forecast_errors_for_new_measurements(session, "asset123", measurements)
 
-    # Only forecast query should run
-    mock_context.commit.assert_not_awaited()
+    session.commit.assert_not_awaited()

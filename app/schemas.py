@@ -113,7 +113,7 @@ class ForecastRun(BaseModel):
     """Schema representing a single forecast run for an asset."""
 
     forecast_run_id: str
-    model_run_id: str
+    model_run_id: Optional[str] = None
     values: List[ForecastValue]
     accuracy_metrics: Optional[AccuracyMetrics]
 
