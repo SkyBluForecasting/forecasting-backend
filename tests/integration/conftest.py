@@ -117,6 +117,34 @@ async def api_client(async_client):
 
 
 @pytest_asyncio.fixture
+def post_measurements(api_client):
+    """POST /assets/{asset_uuid}/measurements/ helper."""
+
+    async def _post(asset_uuid: str, payload: dict):
+        return await api_client.post(
+            f"/assets/{asset_uuid}/measurements/",
+            json=payload,
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    return _post
+
+
+@pytest_asyncio.fixture
+def get_measurements(api_client):
+    """GET /assets/{asset_uuid}/measurements/ helper."""
+
+    async def _get(asset_uuid: str, params: dict):
+        return await api_client.get(
+            f"/assets/{asset_uuid}/measurements/",
+            params=params,
+            headers={"Authorization": "Bearer fake-token"},
+        )
+
+    return _get
+
+
+@pytest_asyncio.fixture
 def post_assets(api_client):
     """POST /assets helper."""
 
