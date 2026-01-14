@@ -119,10 +119,11 @@ async def post_measurements(
     asset_uuid: str,
     data: MeasurementsBatch,
     token: str = Depends(get_token),
+    session: AsyncSession = Depends(get_session),
 ):
     """Insert new measurements for an asset."""
     validate_token(token)
-    await insert_measurements(asset_uuid, [m.dict() for m in data.measurements])
+    await insert_measurements(session, asset_uuid, [m.dict() for m in data.measurements])
     return MeasurementInsertResponse(
         asset_uuid=asset_uuid,
         inserted_count=len(data.measurements),
