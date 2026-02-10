@@ -10,42 +10,45 @@ from app.asset_service import fetch_assets, upsert_assets
 class MockAsset:
     """Mock object representing an AssetIn-like input for upsert_assets."""
 
-    def __init__(self, id, name, type, capacity_kw, measured=False, assets=None):
-        """
-        Initialize a mock asset.
-
-        Args:
-            id (str): Unique identifier for the asset.
-            name (str): Name of the asset.
-            type (str): Asset type (e.g., "system", "distribution_substation").
-            capacity_kw (float): Asset capacity in kW.
-            measured (bool, optional): Whether the asset is measured. Defaults to False.
-            assets (List[MockAsset], optional): Nested child assets. Defaults to empty list.
-        """
+    def __init__(
+        self,
+        id,
+        name,
+        type,
+        capacity_kw,
+        measured=False,
+        latitude=None,
+        longitude=None,
+        assets=None,
+    ):
+        """Initialize a mock API asset."""
         self.id = id
         self.name = name
         self.type = type
         self.capacity_kw = capacity_kw
         self.measured = measured
+        self.latitude = latitude
+        self.longitude = longitude
         self.assets = assets or []
 
 
 class MockAssetRow:
     """Mock database row object representing a persisted Asset."""
 
-    def __init__(self, asset_uuid, name, asset_type, capacity_kw, parent_uuid, depth, measured):
-        """
-        Initialize a mock database asset row.
-
-        Args:
-            asset_uuid (str): Unique identifier of the asset.
-            name (str): Asset name.
-            asset_type (str): Type of asset.
-            capacity_kw (float): Capacity in kW.
-            parent_uuid (str | None): UUID of the parent asset, if any.
-            depth (int): Depth of the asset in hierarchy.
-            measured (bool): Whether the asset is measured.
-        """
+    def __init__(
+        self,
+        asset_uuid,
+        name,
+        asset_type,
+        capacity_kw,
+        parent_uuid,
+        depth,
+        measured,
+        latitude=None,
+        longitude=None,
+        weather_site_id=None,
+    ):
+        """Initiatlize a mock asset returned from DB."""
         self.asset_uuid = asset_uuid
         self.name = name
         self.asset_type = asset_type
@@ -53,17 +56,13 @@ class MockAssetRow:
         self.parent_uuid = parent_uuid
         self.depth = depth
         self.measured = measured
+        self.latitude = latitude
+        self.longitude = longitude
+        self.weather_site_id = weather_site_id
 
 
 def make_mock_session(rows):
-    """Create an AsyncMock session that returns given rows on execute.
-
-    Args:
-        rows (List[MockAssetRow | str]): Rows to return when the session executes a query.
-
-    Returns:
-        AsyncMock: Mock AsyncSession with execute() returning the provided rows.
-    """
+    """Create an AsyncMock session that returns given rows on execute."""
     mock_session = AsyncMock()
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = rows
@@ -121,13 +120,43 @@ async def test_fetch_assets_returns_tree():
     rows = [
         MockAssetRow("uuid1", "System", "system", 0, None, 0, False),
         MockAssetRow("uuid2", "Sub A", "distribution_substation", 100, "uuid1", 1, False),
-        MockAssetRow("uuid3", "Sub B", "distribution_substation", 200, "uuid1", 1, True),
+        MockAssetRow(
+            "uuid3",
+            "Sub B",
+            "distribution_substation",
+            200,
+            "uuid1",
+            1,
+            True,
+            latitude=1.0,
+            longitude=2.0,
+            weather_site_id="site_id_1",
+        ),
     ]
     session = make_mock_session(rows)
     result = await fetch_assets(session)
-    root = result[0]
+
+    [root] = result
     assert root["asset_uuid"] == "uuid1"
-    assert {c["asset_uuid"] for c in root["children"]} == {"uuid2", "uuid3"}
+
+    # Root fields should exist even if None
+    assert "latitude" in root and root["latitude"] is None
+    assert "longitude" in root and root["longitude"] is None
+    assert "weather_site_id" in root and root["weather_site_id"] is None
+
+    children = {c["asset_uuid"] for c in root["children"]}
+    assert children == {"uuid2", "uuid3"}
+
+    # Children should also include the keys
+    for c in root["children"]:
+        assert "latitude" in c
+        assert "longitude" in c
+        assert "weather_site_id" in c
+
+    child_b = next(c for c in root["children"] if c["asset_uuid"] == "uuid3")
+    assert child_b["latitude"] == 1.0
+    assert child_b["longitude"] == 2.0
+    assert child_b["weather_site_id"] == "site_id_1"
 
 
 @pytest.mark.asyncio
@@ -138,10 +167,19 @@ async def test_fetch_assets_filters_by_uuid():
         MockAssetRow("uuid2", "Child", "distribution_substation", 100, "uuid1", 1, False),
     ]
     session = make_mock_session(rows)
+
     result = await fetch_assets(session, "uuid1")
-    root = result[0]
+    [root] = result
     assert root["asset_uuid"] == "uuid1"
     assert root["children"][0]["asset_uuid"] == "uuid2"
+
+    # Optional fields should exist (typically None)
+    assert "latitude" in root
+    assert "longitude" in root
+    assert "weather_site_id" in root
+    assert "latitude" in root["children"][0]
+    assert "longitude" in root["children"][0]
+    assert "weather_site_id" in root["children"][0]
 
 
 @pytest.mark.asyncio
@@ -154,14 +192,17 @@ async def test_fetch_assets_filters_by_uuid_nested():
     ]
     session = make_mock_session(rows)
 
-    # Filter for the grandchild, triggers recursive find_subtree
     result = await fetch_assets(session, "uuid3")
 
-    # The result should be just the subtree starting at uuid3
     assert len(result) == 1
     node = result[0]
     assert node["asset_uuid"] == "uuid3"
-    assert node["children"] == []  # No further children
+    assert node["children"] == []
+
+    # Optional fields should exist (typically None)
+    assert "latitude" in node
+    assert "longitude" in node
+    assert "weather_site_id" in node
 
 
 @pytest.mark.asyncio
@@ -173,8 +214,5 @@ async def test_fetch_assets_filters_by_uuid_not_found():
     ]
     session = make_mock_session(rows)
 
-    # Filter for a UUID that doesn't exist
     result = await fetch_assets(session, "nonexistent_uuid")
-
-    # Should return empty list because subtree not found
     assert result == []

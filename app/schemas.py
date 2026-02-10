@@ -17,8 +17,11 @@ class AssetResponse(BaseModel):
     asset_uuid: str
     name: str
     asset_type: str
-    capacity_kw: Optional[float]
-    parent_uuid: Optional[str]
+    capacity_kw: Optional[float] = None
+    parent_uuid: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    weather_site_id: Optional[str] = None
     depth: int
     measured: bool
     children: List["AssetResponse"] = Field(default_factory=list)
@@ -34,6 +37,8 @@ class AssetIn(BaseModel):
     name: str = Field(..., example="K0A")
     type: AssetType = Field(..., example="distribution_substation")
     capacity_kw: Optional[float] = Field(None, example=80000.0)
+    latitude: Optional[float] = Field(None, example=23.454)
+    longitude: Optional[float] = Field(None, example=-43.454)
     measured: bool = Field(False, example=True)
     assets: List["AssetIn"] = Field(default_factory=list)
 

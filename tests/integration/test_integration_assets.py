@@ -7,7 +7,7 @@ from app.asset_service import fetch_assets
 
 @pytest.mark.asyncio
 async def test_post_assets_inserts(post_assets, test_session, canonical_asset_tree_payload):
-    """POST /assets should insert nested assets correctly."""
+    """POST /assets should insert assets to DB."""
     response = await post_assets(canonical_asset_tree_payload)
     assert response.status_code == 200
 
@@ -16,12 +16,25 @@ async def test_post_assets_inserts(post_assets, test_session, canonical_asset_tr
     assert data["updated"] == 0
     assert data["total"] == 3
 
-    # Verify in DB
     assets = await fetch_assets(test_session)
     [ont] = assets
     assert ont["asset_uuid"] == "ONT"
+    assert "latitude" in ont and ont["latitude"] is None
+    assert "longitude" in ont and ont["longitude"] is None
+    assert "weather_site_id" in ont and ont["weather_site_id"] is None
+
     children = {c["asset_uuid"] for c in ont["children"]}
     assert children == {"K0A", "K0B"}
+
+    k0a = next(c for c in ont["children"] if c["asset_uuid"] == "K0A")
+    assert k0a["latitude"] is None
+    assert k0a["longitude"] is None
+    assert k0a["weather_site_id"] is None
+
+    k0b = next(c for c in ont["children"] if c["asset_uuid"] == "K0B")
+    assert k0b["latitude"] == 1.0
+    assert k0b["longitude"] == 2.0
+    assert k0b["weather_site_id"] is None
 
 
 @pytest.mark.asyncio
@@ -66,6 +79,10 @@ async def test_post_assets_updates_existing(post_assets, test_session):
     assert ont["capacity_kw"] == 10.0
     assert ont["measured"] is True
 
+    assert "latitude" in ont
+    assert "longitude" in ont
+    assert "weather_site_id" in ont
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -95,5 +112,9 @@ async def test_get_assets(
 
     [asset] = assets
     assert asset["asset_uuid"] == expected_uuid
+    assert "latitude" in asset
+    assert "longitude" in asset
+    assert "weather_site_id" in asset
+
     children = {c["asset_uuid"] for c in asset["children"]}
     assert children == expected_children
