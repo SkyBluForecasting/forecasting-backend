@@ -190,7 +190,7 @@ def get_dashboard_asset_data(api_client):
 
 @pytest.fixture
 def canonical_asset_tree_payload():
-    """Assets API payload."""
+    """Canonical asset hierarchy payload."""
     return [
         {
             "id": "ONT",

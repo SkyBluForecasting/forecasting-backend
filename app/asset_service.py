@@ -115,6 +115,8 @@ async def upsert_assets(session: AsyncSession, assets: List[AssetIn]):
                 "measured": a.measured,
                 "parent_uuid": parent_uuid,
                 "depth": depth,
+                "latitude": a.latitude,
+                "longitude": a.longitude,
             }
             if a.assets:
                 flatten(a.assets, parent_uuid=a.id, depth=depth + 1)
@@ -139,6 +141,8 @@ async def upsert_assets(session: AsyncSession, assets: List[AssetIn]):
             "measured": stmt.excluded.measured,
             "parent_uuid": stmt.excluded.parent_uuid,
             "depth": stmt.excluded.depth,
+            "latitude": stmt.excluded.latitude,
+            "longitude": stmt.excluded.longitude,
         },
     )
 
