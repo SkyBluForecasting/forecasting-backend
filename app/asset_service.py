@@ -62,10 +62,13 @@ async def fetch_assets(session: AsyncSession, asset_uuid: str | None = None):
             "asset_uuid": a.asset_uuid,
             "name": a.name,
             "asset_type": a.asset_type,
-            "capacity_kw": a.capacity_kw,
-            "parent_uuid": a.parent_uuid,
+            "capacity_kw": getattr(a, "capacity_kw", None),
+            "parent_uuid": getattr(a, "parent_uuid", None),
             "depth": a.depth,
             "measured": a.measured,
+            "latitude": getattr(a, "latitude", None),
+            "longitude": getattr(a, "longitude", None),
+            "weather_site_id": getattr(a, "weather_site_id", None),
         }
         for a in rows
     ]
@@ -112,6 +115,8 @@ async def upsert_assets(session: AsyncSession, assets: List[AssetIn]):
                 "measured": a.measured,
                 "parent_uuid": parent_uuid,
                 "depth": depth,
+                "latitude": a.latitude,
+                "longitude": a.longitude,
             }
             if a.assets:
                 flatten(a.assets, parent_uuid=a.id, depth=depth + 1)
@@ -136,6 +141,8 @@ async def upsert_assets(session: AsyncSession, assets: List[AssetIn]):
             "measured": stmt.excluded.measured,
             "parent_uuid": stmt.excluded.parent_uuid,
             "depth": stmt.excluded.depth,
+            "latitude": stmt.excluded.latitude,
+            "longitude": stmt.excluded.longitude,
         },
     )
 

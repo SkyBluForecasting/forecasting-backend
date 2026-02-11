@@ -213,6 +213,8 @@ def canonical_asset_tree_payload():
                     "type": "distribution_substation",
                     "capacity_kw": 70000.0,
                     "measured": True,
+                    "latitude": 1.0,
+                    "longitude": 2.0,
                     "assets": [],
                 },
             ],
