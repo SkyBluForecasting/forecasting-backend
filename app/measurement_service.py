@@ -50,8 +50,6 @@ async def insert_measurements(
             }
 
         rows = list(unique_rows.values())
-        if not rows:
-            continue
 
         stmt = pg_insert(Measurement).values(rows)
         stmt = stmt.on_conflict_do_update(

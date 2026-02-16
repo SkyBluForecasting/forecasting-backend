@@ -151,6 +151,20 @@ async def test_insert_measurements_upsert(session):
     assert result2["inserted"] == 1
 
 
+@pytest.mark.asyncio
+async def test_insert_forecast_errors_returns_when_no_load_measurements(session):
+    """If there are no load measurements, we should return early without DB calls."""
+    measurements = [
+        {"timestamp": datetime(2025, 10, 7, 12, 0), "metric": "temp", "value": 12.3},
+        {"timestamp": datetime(2025, 10, 7, 13, 0), "metric": "power", "value": 99.0},
+    ]
+
+    await _insert_forecast_errors_for_new_measurements(session, "asset123", measurements)
+
+    session.execute.assert_not_awaited()
+    session.commit.assert_not_awaited()
+
+
 # -----------------------------
 # _compute_forecast_errors tests
 # -----------------------------

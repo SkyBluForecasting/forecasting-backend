@@ -16,7 +16,7 @@ asyncpg
 aiosqlite
 
 # Internal Packages
-forecasting-db==2.4.0
+forecasting-db==2.4.2
 
 
 # Development dependencies
