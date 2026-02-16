@@ -89,13 +89,19 @@ jobs:
       - name: Build Docker image and restart container
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER_STAGING }}@${{ secrets.EC2_HOST_STAGING }} << EOF
-            cd ~/forecasting-backend
-            set -e
+            set -euo pipefail
 
-            echo "--- STOPPING OLD CONTAINER ---"
-            docker stop forecasting-api || true
-            docker rm forecasting-api || true
-            docker rmi forecasting-api || true
+            # Ensure docker starts on reboot
+            sudo systemctl enable docker
+            sudo systemctl start docker
+
+            cd ~/forecasting-backend
+
+            echo "--- STOPPING OLD CONTAINER (if any) ---"
+            docker rm -f forecasting-api 2>/dev/null || true
+
+            echo "--- OPTIONAL: REMOVE OLD IMAGE TAG (if any) ---"
+            docker image rm forecasting-api 2>/dev/null || true
 
             echo "--- BUILDING DOCKER IMAGE ---"
             docker build --no-cache -t forecasting-api . \
@@ -104,8 +110,15 @@ jobs:
             echo "--- RUNNING NEW CONTAINER ---"
             docker run -d \
               --name forecasting-api \
+              --restart unless-stopped \
               --env-file .env \
               -e DATABASE_URL=${{ secrets.SQLALCHEMY_URL }} \
               -p 80:8000 \
               forecasting-api
+
+            echo "--- CONTAINER STATUS ---"
+            docker ps --filter "name=forecasting-api"
+
+            echo "--- LAST 50 LOG LINES ---"
+            docker logs --tail 50 forecasting-api || true
           EOF
