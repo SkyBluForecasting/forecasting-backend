@@ -82,6 +82,7 @@ async def clean_db(test_session):
             """
             TRUNCATE TABLE
                 product.forecast_errors,
+                product.weather_sites,
                 product.constraints,
                 openstef.forecast,
                 openstef.forecast_runs,

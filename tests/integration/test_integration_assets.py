@@ -1,6 +1,8 @@
 """Integration tests for the /assets APIs."""
 
 import pytest
+from forecasting_db.models import Asset, WeatherSite
+from sqlalchemy import select, update
 
 from app.asset_service import fetch_assets
 
@@ -82,6 +84,75 @@ async def test_post_assets_updates_existing(post_assets, test_session):
 
     assert "latitude" in ont
     assert "weather_site_id" in ont
+
+
+@pytest.mark.asyncio
+async def test_post_assets_clears_weather_site_id_when_coords_change(post_assets, test_session):
+    """POST /assets should clear weather_site_id if lat/long changes."""
+    # 1) Insert with initial coords
+    initial_payload = [
+        {
+            "id": "ONT",
+            "name": "Ontario",
+            "type": "system",
+            "capacity_kw": 0.0,
+            "measured": False,
+            "latitude": 43.0,
+            "longitude": -79.0,
+            "assets": [],
+        }
+    ]
+    resp = await post_assets(initial_payload)
+    assert resp.status_code == 200
+
+    # 2) Simulate nightly job mapping weather_site_id
+    site = WeatherSite(
+        weather_site_id="site_123",
+        site_lat=43.0,
+        site_long=-79.0,
+    )
+    test_session.add(site)
+    await test_session.commit()
+
+    await test_session.execute(
+        update(Asset).where(Asset.asset_uuid == "ONT").values(weather_site_id="site_123")
+    )
+    await test_session.commit()
+
+    # sanity check (read columns, not ORM object)
+    (wsid,) = (
+        await test_session.execute(select(Asset.weather_site_id).where(Asset.asset_uuid == "ONT"))
+    ).one()
+    assert wsid == "site_123"
+
+    # 3) POST with changed coords (should clear weather_site_id)
+    updated_payload = [
+        {
+            "id": "ONT",
+            "name": "Ontario",
+            "type": "system",
+            "capacity_kw": 0.0,
+            "measured": False,
+            "latitude": 44.0,  # changed
+            "longitude": -79.0,  # same
+            "assets": [],
+        }
+    ]
+    resp2 = await post_assets(updated_payload)
+    assert resp2.status_code == 200
+
+    # Verify DB state (read columns, not ORM object)
+    lat2, lon2, wsid2 = (
+        await test_session.execute(
+            select(Asset.latitude, Asset.longitude, Asset.weather_site_id).where(
+                Asset.asset_uuid == "ONT"
+            )
+        )
+    ).one()
+
+    assert lat2 == 44.0
+    assert lon2 == -79.0
+    assert wsid2 is None
 
 
 @pytest.mark.asyncio

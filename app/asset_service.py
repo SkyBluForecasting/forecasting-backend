@@ -4,9 +4,10 @@ import logging
 from typing import List
 
 from forecasting_db.models import Asset, AssetType
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import null
 
 from app.schemas import AssetIn
 
@@ -132,6 +133,10 @@ async def upsert_assets(session: AsyncSession, assets: List[AssetIn]):
 
     # Upsert
     stmt = insert(Asset).values(flat_rows)
+
+    lat_changed = Asset.latitude.is_distinct_from(stmt.excluded.latitude)
+    lon_changed = Asset.longitude.is_distinct_from(stmt.excluded.longitude)
+    coords_changed = lat_changed | lon_changed
     stmt = stmt.on_conflict_do_update(
         index_elements=["asset_uuid"],
         set_={
@@ -143,6 +148,11 @@ async def upsert_assets(session: AsyncSession, assets: List[AssetIn]):
             "depth": stmt.excluded.depth,
             "latitude": stmt.excluded.latitude,
             "longitude": stmt.excluded.longitude,
+            # Clear weather_site_id iff coords changed; otherwise keep existing mapping
+            "weather_site_id": case(
+                (coords_changed, null()),
+                else_=Asset.weather_site_id,
+            ),
         },
     )
 
